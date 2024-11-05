@@ -143,9 +143,8 @@ pub struct AttestationReport {
     pub current_tcb: TcbVersion,
     /// Information about the platform. See PlatformInfo
     pub plat_info: PlatformInfo,
-    /// Private variable as only the first bit is important.
-    /// See [author_key_en()](self::AttestationReport::author_key_en).
-    _author_key_en: u32,
+    /// Information about keys being used to validate plaform. See KeyInfo.
+    pub key_info: KeyInfo,
     _reserved_0: u32,
     #[serde(with = "BigArray")]
     /// Guest-provided 512 Bits of Data
@@ -169,7 +168,13 @@ pub struct AttestationReport {
     pub report_id_ma: [u8; 32],
     /// Reported TCB version used to derive the VCEK that signed this report.
     pub reported_tcb: TcbVersion,
-    _reserved_1: [u8; 24],
+    /// Family ID (Combined Extended Family and Family ID)
+    pub cpuid_family: u8,
+    /// Model ID (Combined Extended Model and Model Fields)
+    pub cpuid_model: u8,
+    /// Stepping (CPUID Stepping)
+    pub cpuid_step: u8,
+    _reserved_1: [u8; 21],
     #[serde(with = "BigArray")]
     /// If MaskChipId is set to 0, Identifier unique to the chip.
     /// Otherwise set to 0h.
@@ -199,12 +204,6 @@ pub struct AttestationReport {
     pub signature: Signature,
 }
 
-impl AttestationReport {
-    fn author_key_en(&self) -> bool {
-        self._author_key_en == 1
-    }
-}
-
 impl Default for AttestationReport {
     fn default() -> Self {
         Self {
@@ -217,7 +216,7 @@ impl Default for AttestationReport {
             sig_algo: Default::default(),
             current_tcb: Default::default(),
             plat_info: Default::default(),
-            _author_key_en: Default::default(),
+            key_info: Default::default(),
             _reserved_0: Default::default(),
             report_data: [0; 64],
             measurement: [0; 48],
@@ -227,6 +226,9 @@ impl Default for AttestationReport {
             report_id: Default::default(),
             report_id_ma: Default::default(),
             reported_tcb: Default::default(),
+            cpuid_family: Default::default(),
+            cpuid_model: Default::default(),
+            cpuid_step: Default::default(),
             _reserved_1: Default::default(),
             chip_id: [0; 64],
             committed_tcb: Default::default(),
@@ -261,7 +263,7 @@ Signature Algorithm:          {}
 Current TCB:
 {}
 {}
-Author Key Encryption:        {}
+{}
 Report Data:                  {}
 Measurement:                  {}
 Host Data:                    {}
@@ -270,6 +272,9 @@ Author Key Digest:            {}
 Report ID:                    {}
 Report ID Migration Agent:    {}
 Reported TCB:                 {}
+CPUID Family ID:              {}
+CPUID Model ID:               {}
+CPUID Stepping:               {}
 Chip ID:                      {}
 Committed TCB:
 {}
@@ -293,7 +298,7 @@ Launch TCB:
             self.sig_algo,
             self.current_tcb,
             self.plat_info,
-            self.author_key_en(),
+            self.key_info,
             hexdump(&self.report_data),
             hexdump(&self.measurement),
             hexdump(&self.host_data),
@@ -302,6 +307,9 @@ Launch TCB:
             hexdump(&self.report_id),
             hexdump(&self.report_id_ma),
             self.reported_tcb,
+            self.cpuid_family,
+            self.cpuid_model,
+            self.cpuid_step,
             hexdump(&self.chip_id),
             self.committed_tcb,
             self.current_build,
@@ -517,6 +525,55 @@ Platform Info ({}):
             self.ecc_enabled(),
             self.rapl_disabled(),
             self.ciphertext_hiding_enabled(),
+        )
+    }
+}
+
+bitfield! {
+    /// A structure with a bit-field unsigned 32 bit integer:
+    /// Bit 0 representing if the author key is present.
+    /// Bit 1 representing the value of MaskChipKey.
+    /// Bit 2-4 indicates the key used to sign the report.
+    /// Bits 5-31 are reserved.
+    #[repr(C)]
+    #[derive(Default, Deserialize, Clone, Copy, Serialize)]
+    pub struct KeyInfo(u32);
+    impl Debug;
+    /// Indicates that the digest of the author key is present in AUTHOR_KEY_DIGEST
+    pub author_key_en, _: 0, 0;
+    /// The value of MaskChipKey
+    pub mask_chip_key, _: 1, 1;
+    /// Encodes the key used to sign the report
+    /// 0: VCEK
+    /// 1: VLEK
+    /// 2-6: RESERVED
+    /// 7: NONE
+    pub signing_key, _: 2, 4;
+    /// reserved
+    reserved, _: 5, 31;
+}
+
+impl Display for KeyInfo {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        
+        let signing_key = match self.mask_chip_key() {
+            0 => "VCEK",
+            1 => "VLEK",
+            _=> "NONE",
+        };
+        
+        write!(
+            f,
+            r#"
+Guest Key Info ({}):
+  Author Key Enabled:        {}
+  Mask Chip Enabled:         {}
+  Signing Key:               {}
+"#,
+            self.0,
+            self.author_key_en(),
+            self.mask_chip_key(),
+            signing_key
         )
     }
 }
