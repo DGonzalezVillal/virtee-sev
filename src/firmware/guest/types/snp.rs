@@ -1,9 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::error::AttestationReportError;
-use crate::{certs::snp::ecdsa::Signature, firmware::host::TcbVersion, util::hexdump};
+use crate::{
+    certs::snp::ecdsa::Signature,
+    firmware::host::TcbVersion,
+    util::{hexdump, sealed},
+};
 use bitfield::bitfield;
-use serde::{Deserialize, Serialize};
+use serde::de::{self, SeqAccess, Visitor};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_big_array::BigArray;
 use std::convert::{TryFrom, TryInto};
 use std::fmt::Display;
@@ -101,7 +106,7 @@ bitfield! {
 
 /// Trait shared between attestation reports to be able to verify them against the VEK.
 #[cfg(any(feature = "openssl", feature = "crypto_nossl"))]
-pub(crate) trait Attestable: Serialize {
+pub trait Attestable: Serialize + sealed::Sealed {
     /// Serialize the provided Attestation Report and get the measurable bytes from it
     fn measurable_bytes(&self) -> io::Result<Vec<u8>> {
         let measurable_bytes: &[u8] = &bincode::serialize(self).map_err(|e| {
@@ -115,6 +120,9 @@ pub(crate) trait Attestable: Serialize {
     /// Get the attestation report signature
     fn signature(&self) -> &Signature;
 }
+
+// impl sealed::Sealed for Attestable{}
+/// Sealed trait
 
 /// The guest can request that the firmware construct an attestation report. External entities can use an
 /// attestation report to assure the identity and security configuration of the guest.
@@ -139,7 +147,7 @@ pub(crate) trait Attestable: Serialize {
 ///
 /// Since the release of the 1.56 ABI, the Attestation Report was bumped from version 2 to 3.
 /// Due to content differences, both versions are kept separately in order to provide backwards compatibility and most reliable security.
-#[derive(Debug, Clone, Copy, Deserialize, Serialize)]
+#[derive(Debug, Clone, Copy)]
 pub enum AttestationReport {
     /// Version 2 of the Attestation Report
     V2(AttestationReportV2),
@@ -147,12 +155,15 @@ pub enum AttestationReport {
     V3(AttestationReportV3),
 }
 
+impl sealed::Sealed for AttestationReport {}
+
 impl TryFrom<&[u8]> for AttestationReport {
     type Error = AttestationReportError;
 
     fn try_from(raw_report: &[u8]) -> Result<Self, Self::Error> {
+        println!("bit 0: {:?}", raw_report[0]);
         let version =
-            u32::from_le_bytes([raw_report[0], raw_report[1], raw_report[2], raw_report[3]]);
+            u32::from_le_bytes([raw_report[2], raw_report[1], raw_report[0], 0]);
         // Return the appropriate report version
         match version {
             2 => {
@@ -167,6 +178,132 @@ impl TryFrom<&[u8]> for AttestationReport {
         }
     }
 }
+
+// Implement custom serialization for AttestationReport
+impl Serialize for AttestationReport {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match self {
+            AttestationReport::V2(report) => {
+                println!("Serializing V2 report with version: {}", report.version);
+                report.serialize(serializer)
+            }
+            AttestationReport::V3(report) => {
+                println!("Serializing V3 report with version: {}", report.version);
+                report.serialize(serializer)
+            }
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for AttestationReport {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct AttestationReportVisitor;
+
+        impl<'de> Visitor<'de> for AttestationReportVisitor {
+            type Value = AttestationReport;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                formatter.write_str("a byte buffer representing an attestation report")
+            }
+
+            fn visit_byte_buf<E>(self, value: Vec<u8>) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                println!("Byte Buf: {:?}", value);
+                AttestationReport::try_from(value.as_slice()).map_err(de::Error::custom)
+            }
+        }
+
+        deserializer.deserialize_byte_buf(AttestationReportVisitor)
+
+        // println!("Version Bytes: {:?}", raw_bytes);
+
+        // if raw_bytes.len() < 4 {
+        //     return Err(de::Error::custom("Attestation report is too small"));
+        // }
+
+        // // Extract version number (assuming little-endian encoding)
+        // let version = u32::from_le_bytes([raw_bytes[0], raw_bytes[1], raw_bytes[2], raw_bytes[3]]);
+        // println!("Extracted Version: {}", version);
+
+        // match version {
+        //     2 => {
+        //         let report_v2 = bincode::deserialize::<AttestationReportV2>(&raw_bytes)
+        //             .map_err(de::Error::custom)?;
+
+        //         Ok(AttestationReport::V2(report_v2))
+        //     }
+        //     3 => {
+        //         let report_v3 = bincode::deserialize::<AttestationReportV3>(&raw_bytes)
+        //             .map_err(de::Error::custom)?;
+        //         Ok(AttestationReport::V3(report_v3))
+        //     }
+        //     _ => Err(de::Error::custom(format!(
+        //         "Unsupported attestation report version: {}",
+        //         version
+        //     ))),
+        // }
+    }
+}
+
+// struct AttestationReportVisitor;
+// impl<'de> Visitor<'de> for AttestationReportVisitor {
+//     type Value = AttestationReport;
+//     fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+//         formatter.write_str("An attestation report based upon a given version number.")
+//     }
+//     fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+//     where
+//         A: SeqAccess<'de>,
+//     {
+//         // let Some(version_bytes) = seq.next_element::<[u8;4]>()? else {
+//         //     return Err(de::Error::custom("missing version bytes"));
+//         // };
+
+//         // Ensure we correctly read the first 4 bytes as the version
+//         let version_bytes: [u8; 4] = seq
+//         .next_element()?
+//         .ok_or_else(|| de::Error::custom("Missing version bytes"))?;
+
+//         println!("Version Bytes: {:?}", version_bytes);
+
+//         let version = u32::from_be_bytes(version_bytes);            // .ok_or_else(|| de::Error::custom("missing version"))?;
+//         println!("Deserialized report version: {}", version);
+//         match version {
+//             2 => {
+//                 let report: AttestationReportV2 = seq
+//                     .next_element()?
+//                     .ok_or_else(|| de::Error::custom("missing V2 report data"))?;
+//                 Ok(AttestationReport::V2(report))
+//             }
+//             3 => {
+//                 let report: AttestationReportV3 = seq
+//                     .next_element()?
+//                     .ok_or_else(|| de::Error::custom("missing V3 report data"))?;
+//                 Ok(AttestationReport::V3(report))
+//             }
+//             _ => Err(de::Error::custom(format!(
+//                 "unsupported attestation report version: {}",
+//                 version
+//             ))),
+//         }
+//     }
+// }
+// impl<'de> Deserialize<'de> for AttestationReport {
+//     fn deserialize<D>(deserializer: D) -> Result<AttestationReport, D::Error>
+//     where
+//         D: Deserializer<'de>,
+//     {
+//         deserializer.deserialize_byte_buf(AttestationReportVisitor)
+//     }
+// }
 
 #[cfg(any(feature = "openssl", feature = "crypto_nossl"))]
 impl Attestable for AttestationReport {
@@ -594,6 +731,8 @@ Launch TCB:
     }
 }
 
+impl sealed::Sealed for AttestationReportV2 {}
+
 #[cfg(any(feature = "openssl", feature = "crypto_nossl"))]
 impl Attestable for AttestationReportV2 {
     fn signature(&self) -> &Signature {
@@ -815,6 +954,8 @@ Launch TCB:
         )
     }
 }
+
+impl sealed::Sealed for AttestationReportV3 {}
 
 #[cfg(any(feature = "openssl", feature = "crypto_nossl"))]
 impl Attestable for AttestationReportV3 {

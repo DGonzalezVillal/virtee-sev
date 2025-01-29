@@ -5,6 +5,7 @@
 pub mod cached_chain;
 mod impl_const_id;
 pub mod large_array;
+pub(crate) mod sealed;
 
 use std::{
     io::{Read, Result, Write},
