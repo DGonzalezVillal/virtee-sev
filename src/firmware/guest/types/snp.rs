@@ -240,6 +240,15 @@ impl ByteParser<()> for ReportVariant {
 /// The launch_mit_vector and current_mit_vector fields
 /// The page_swap_disabled field in the GuestPolicy field
 /// The SEV-TIO field in the PlatformInfo field
+///
+/// # Compatibility notice
+///
+/// This legacy eager-parsing model will be replaced in the next breaking
+/// release by a two-stage attestation report API that separates unverified
+/// report framing from verified report-body parsing.
+///
+/// Code that depends directly on `AttestationReport` should expect to migrate
+/// in the next breaking release.
 #[repr(C)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
