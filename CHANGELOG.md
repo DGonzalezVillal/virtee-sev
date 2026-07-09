@@ -9,9 +9,19 @@ All notable changes to this project will be documented in this file.
 - Introduced the `snp::types` module for portable SNP ABI value types shared
   across attestation and platform code. `TcbVersion` is the first type moved
   there; `firmware::host::TcbVersion` remains available as a re-export.
+- Moved `GuestPolicy`, `PlatformInfo`, `KeyInfo`, and `Version` into
+  `snp::types`; `firmware::guest` re-exports them for compatibility.
+- Moved `CertType` and `MaskId` into `snp::types`; `firmware::host`
+  re-exports them for compatibility.
 
 ### Changed
 
+- Grouped attestation report field types under `snp::types::report`
+  (`PlatformInfo`, `KeyInfo`). The flat `snp::types` re-exports are unchanged.
+- Grouped `Version` and `GuestPolicy` under `snp::types::primitives` and `MaskId`
+  under `snp::types::platform_config`. `GuestPolicy` is shared across the
+  attestation report, launch, and id-block paths, not report-only. Flat
+  re-exports at `snp::types` are unchanged.
 - Removed legacy `sev` from the crate's default features. Defaults are now
   `snp` only, so SNP attestation and verification can be built on non-x86_64
   targets without pulling in first-generation SEV code. Enable the `sev`
