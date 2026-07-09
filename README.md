@@ -30,15 +30,20 @@ This crate implements APIs for both SEV and SEV-SNP management.
 
 ## SEV and SEV-SNP enablement
 
-By default, both the SEV and SEV-SNP libraries are compiled.
-Because many modules provide support to both legacy SEV and SEV-SNP, they have been split into individual sub-modules `sev.rs` and `snp.rs`, isolating generation specific behavior.
-If desired, you may opt to exclude either of the sub-modules by disabling its feature in your project's `Cargo.toml`  
+By default, only the SEV-SNP library is compiled. First-generation SEV
+(pre-SNP) support — including platform APIs, certificate and attestation
+report verification, launch, and session — is available via the `sev`
+feature flag. That stack is separate from SEV-SNP and is not needed for
+SNP-only consumers such as remote attestation verifiers.
+Because many modules provide support to both legacy SEV and SEV-SNP, they have
+been split into individual sub-modules `sev.rs` and `snp.rs`, isolating
+generation specific behavior.
 
-For example, to include the SEV APIs only:  
+For example, to include first-generation SEV support:  
 `sev = { version = "1.2.1", default-features = false, features = ["sev"] }`  
- 
-To include the SEV-SNP APIs only:  
-`sev = { version = "1.2.1", default-features = false, features = ["snp"] }`  
+
+To use SEV-SNP with the defaults (or explicitly):  
+`sev = { version = "1.2.1", features = ["snp"] }`  
 
 ## Platform Management
 
