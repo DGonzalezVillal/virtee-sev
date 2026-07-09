@@ -98,6 +98,9 @@ compile_error!(
 /// SEV and SEV-SNP certificates interface.
 pub mod certs;
 
+#[cfg(feature = "snp")]
+pub mod snp;
+
 pub mod firmware;
 pub mod launch;
 #[cfg(all(

@@ -5,8 +5,8 @@ use crate::certs::snp::{Certificate, Chain, Verifiable};
 
 use crate::{
     certs::snp::signature::SignatureAlgorithm,
-    firmware::host::TcbVersion,
     parser::{ByteParser, Decoder, Encoder},
+    snp::types::TcbVersion,
     util::{
         hexline::HexLine,
         parser_helper::{validate_reserved, ReadExt, WriteExt},
