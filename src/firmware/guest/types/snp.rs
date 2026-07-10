@@ -13,7 +13,9 @@ use crate::{
     Generation,
 };
 
-pub use crate::snp::types::{GuestPolicy, KeyInfo, PlatformInfo, TcbVersion, Version};
+pub use crate::snp::types::{
+    DerivedKey, GuestFieldSelect, GuestPolicy, KeyInfo, PlatformInfo, TcbVersion, Version,
+};
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -25,99 +27,6 @@ use std::{
     fmt::Display,
     io::{Read, Write},
 };
-
-use bitfield::bitfield;
-
-/// Structure of required data for fetching the derived key.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub struct DerivedKey {
-    /// Selects the root key to derive the key from.
-    /// 0: Indicates VCEK.
-    /// 1: Indicates VMRK.
-    root_key_select: u32,
-
-    /// Reserved, must be zero
-    _reserved_0: u32,
-
-    /// What data will be mixed into the derived key.
-    pub guest_field_select: GuestFieldSelect,
-
-    /// The VMPL to mix into the derived key. Must be greater than or equal
-    /// to the current VMPL.
-    pub vmpl: u32,
-
-    /// The guest SVN to mix into the key. Must not exceed the guest SVN
-    /// provided at launch in the ID block.
-    pub guest_svn: u32,
-
-    /// The TCB version to mix into the derived key. Must not
-    /// exceed CommittedTcb.
-    pub tcb_version: u64,
-
-    /// The mitigation vector value to mix into the derived key.
-    /// Specific bit settings corresponding to mitigations required for Guest operation.
-    pub launch_mit_vector: Option<u64>,
-}
-
-impl DerivedKey {
-    /// Create a new instance for requesting an DerivedKey.
-    pub fn new(
-        root_key_select: bool,
-        guest_field_select: GuestFieldSelect,
-        vmpl: u32,
-        guest_svn: u32,
-        tcb_version: u64,
-        launch_mit_vector: Option<u64>,
-    ) -> Self {
-        Self {
-            root_key_select: u32::from(root_key_select),
-            _reserved_0: Default::default(),
-            guest_field_select,
-            vmpl,
-            guest_svn,
-            tcb_version,
-            launch_mit_vector,
-        }
-    }
-
-    /// Obtain a copy of the root key select value (Private Field)
-    pub fn get_root_key_select(&self) -> u32 {
-        self.root_key_select
-    }
-}
-
-bitfield! {
-    /// Data which will be mixed into the derived key.
-    ///
-    /// | Bit(s) | Name | Description |
-    /// |--------|------|-------------|
-    /// |0|GUEST_POLICY|Indicates that the guest policy will be mixed into the key.|
-    /// |1|IMAGE_ID|Indicates that the image ID of the guest will be mixed into the key.|
-    /// |2|FAMILY_ID|Indicates the family ID of the guest will be mixed into the key.|
-    /// |3|MEASUREMENT|Indicates the measurement of the guest during launch will be mixed into the key.|
-    /// |4|GUEST_SVN|Indicates that the guest-provided SVN will be mixed into the key.|
-    /// |5|TCB_VERSION|Indicates that the guest-provided TCB_VERSION will be mixed into the key.|
-    /// |6|LAUNCH_MIT_VECTOR|Indicates that the guest-provided LAUNCH_MIT_VECTOR will be mixed into the key.|
-    /// |63:7|\-|Reserved. Must be zero.|
-    #[repr(C)]
-    #[derive(Default, Copy, Clone,PartialEq, Eq, PartialOrd, Ord)]
-    pub struct GuestFieldSelect(u64);
-    impl Debug;
-    /// Check/Set guest policy inclusion in derived key.
-    pub get_guest_policy, set_guest_policy: 0;
-    /// Check/Set image id inclusion in derived key.
-    pub get_image_id, set_image_id: 1;
-    /// Check/Set family id inclusion in derived key.
-    pub get_family_id, set_family_id: 2;
-    /// Check/Set measurement inclusion in derived key.
-    pub get_measurement, set_measurement: 3;
-    /// Check/Set svn inclusion in derived key.
-    pub get_svn, set_svn: 4;
-    /// Check/Set tcb version inclusion in derived key.
-    pub get_tcb_version, set_tcb_version: 5;
-     /// Indicates that the guest-provied LAUNCH_MIT_VECTOR will be mixed into the key.
-    pub get_launch_mit_vector, set_launch_mit_vector: 6;
-}
 
 /// Identifies the firmware-defined format version of an SEV-SNP attestation report.
 ///
@@ -840,67 +749,6 @@ mod tests {
     const CHIP_ID_RANGE: Range<usize> = 0x1A0..0x1E0;
 
     #[test]
-    fn test_derive_key_new() {
-        let expected: DerivedKey = DerivedKey {
-            root_key_select: 0,
-            _reserved_0: 0,
-            guest_field_select: GuestFieldSelect(0),
-            vmpl: 0,
-            guest_svn: 0,
-            tcb_version: 0,
-            launch_mit_vector: None,
-        };
-
-        let guest_field: GuestFieldSelect = GuestFieldSelect(0);
-
-        let actual: DerivedKey = DerivedKey::new(false, guest_field, 0, 0, 0, None);
-
-        assert_eq!(actual, expected);
-    }
-
-    #[test]
-    fn test_derive_key_get_root_key_select() {
-        let dk_struct: DerivedKey = DerivedKey {
-            root_key_select: 0,
-            _reserved_0: 0,
-            guest_field_select: GuestFieldSelect(0),
-            vmpl: 0,
-            guest_svn: 0,
-            tcb_version: 0,
-            launch_mit_vector: None,
-        };
-
-        let expected: u32 = 0;
-        let actual: u32 = dk_struct.get_root_key_select();
-
-        assert_eq!(actual, expected);
-    }
-
-    #[test]
-    fn test_guest_field_select_all_on() {
-        let actual: GuestFieldSelect = GuestFieldSelect(0b111111);
-
-        assert!(actual.get_guest_policy());
-        assert!(actual.get_image_id());
-        assert!(actual.get_family_id());
-        assert!(actual.get_measurement());
-        assert!(actual.get_svn());
-        assert!(actual.get_tcb_version());
-    }
-
-    #[test]
-    fn test_guest_field_select_all_off() {
-        let actual: GuestFieldSelect = GuestFieldSelect(0);
-
-        assert!(!actual.get_guest_policy());
-        assert!(!actual.get_image_id());
-        assert!(!actual.get_family_id());
-        assert!(!actual.get_measurement());
-        assert!(!actual.get_svn());
-        assert!(!actual.get_tcb_version());
-    }
-
-    #[test]
     fn test_report_body_fmt_v2_zero() {
         // Build a full firmware report (1184) with v2 and a non-masked chip_id.
         let mut bytes = vec![0u8; Report::REPORT_LEN];
@@ -1082,32 +930,6 @@ Current Mitigation Vector:    None
         let raw_v3 = [3, 0, 0, 0]; // Version 3
         let version = u32::from_le_bytes([raw_v3[0], raw_v3[1], raw_v3[2], raw_v3[3]]);
         assert_eq!(version, 3);
-    }
-
-    #[test]
-    fn test_guest_field_select_operations() {
-        let mut field = GuestFieldSelect::default();
-
-        field.set_guest_policy(true);
-        assert!(field.get_guest_policy());
-
-        field.set_image_id(true);
-        assert!(field.get_image_id());
-
-        field.set_family_id(true);
-        assert!(field.get_family_id());
-
-        field.set_measurement(true);
-        assert!(field.get_measurement());
-    }
-
-    #[test]
-    fn test_derived_key_fields() {
-        let key = DerivedKey::new(true, GuestFieldSelect(0xFF), 2, 3, 0x1234, None);
-        assert_eq!(key.get_root_key_select(), 1);
-        assert_eq!(key.vmpl, 2);
-        assert_eq!(key.guest_svn, 3);
-        assert_eq!(key.tcb_version, 0x1234);
     }
 
     #[test]

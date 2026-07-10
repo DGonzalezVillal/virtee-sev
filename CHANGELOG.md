@@ -13,6 +13,8 @@ All notable changes to this project will be documented in this file.
   `snp::types`; `firmware::guest` re-exports them for compatibility.
 - Moved `CertType` and `MaskId` into `snp::types`; `firmware::host`
   re-exports them for compatibility.
+- Moved `DerivedKey` and `GuestFieldSelect` into `snp::types::derived_key`;
+  `firmware::guest` re-exports them for compatibility.
 
 ### Changed
 
@@ -22,6 +24,8 @@ All notable changes to this project will be documented in this file.
   under `snp::types::platform_config`. `GuestPolicy` is shared across the
   attestation report, launch, and id-block paths, not report-only. Flat
   re-exports at `snp::types` are unchanged.
+- Grouped `DerivedKey` and `GuestFieldSelect` under `snp::types::derived_key`
+  for the `SNP_GET_DERIVED_KEY` guest ioctl ABI.
 - Removed legacy `sev` from the crate's default features. Defaults are now
   `snp` only, so SNP attestation and verification can be built on non-x86_64
   targets without pulling in first-generation SEV code. Enable the `sev`
