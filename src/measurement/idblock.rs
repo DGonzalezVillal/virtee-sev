@@ -7,7 +7,7 @@ use std::{convert::TryFrom, fs::File, io::Read, path::PathBuf};
 
 use crate::{
     error::IdBlockError,
-    firmware::guest::GuestPolicy,
+    snp::types::GuestPolicy,
     measurement::{
         idblock_types::{
             FamilyId, IdAuth, IdBlock, IdMeasurements, ImageId, SevEcdsaPubKey, SevEcdsaSig,

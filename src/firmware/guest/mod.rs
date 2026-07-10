@@ -4,11 +4,9 @@
 //!
 //! The Guest owner is a tenant of a virtualization provider. They may have
 //! one or more guest confidential virtual-machines (VM) or containers which
-//! may be deployed in a Platform Owner's environment..
+//! may be deployed in a Platform Owner's environment.
 
-mod types;
-
-pub use types::*;
+pub use crate::snp::types::{DerivedKey, GuestFieldSelect};
 
 use crate::error::*;
 

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-//! Attestation report body field types from the SNP ABI.
+//! Grouped attestation report body field views.
 
 mod key_info;
 mod platform_info;

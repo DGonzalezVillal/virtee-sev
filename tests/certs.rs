@@ -77,7 +77,7 @@ mod snp {
 
     #[test]
     fn milan_report() {
-        use sev::firmware::guest::{Report, ReportBody};
+        use sev::attestation::{Report, ReportBody};
 
         let ark = milan::ark().unwrap();
         let ask = milan::ask().unwrap();
@@ -99,7 +99,7 @@ mod snp {
 
     #[test]
     fn milan_report_invalid() {
-        use sev::firmware::guest::{Report, ReportBody};
+        use sev::attestation::{Report, ReportBody};
 
         let ark = milan::ark().unwrap();
         let ask = milan::ask().unwrap();

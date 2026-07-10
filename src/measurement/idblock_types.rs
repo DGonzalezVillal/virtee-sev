@@ -18,7 +18,7 @@ use std::{
 
 use crate::{
     error::IdBlockError,
-    firmware::guest::GuestPolicy,
+    snp::types::GuestPolicy,
     measurement::snp::SnpLaunchDigest,
     parser::{ByteParser, Decoder, Encoder},
     util::parser_helper::{ReadExt, WriteExt},

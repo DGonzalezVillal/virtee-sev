@@ -99,6 +99,9 @@ compile_error!(
 pub mod certs;
 
 #[cfg(feature = "snp")]
+pub mod attestation;
+
+#[cfg(feature = "snp")]
 pub mod snp;
 
 pub mod firmware;

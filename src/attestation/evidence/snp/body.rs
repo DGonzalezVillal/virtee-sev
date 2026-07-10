@@ -1,292 +1,18 @@
 // SPDX-License-Identifier: Apache-2.0
 
-#[cfg(any(feature = "openssl", feature = "crypto_nossl"))]
-use crate::certs::snp::{Certificate, Chain, Verifiable};
-
 use crate::{
     certs::snp::signature::SignatureAlgorithm,
-    parser::{ByteParser, Decoder, Encoder},
-    util::{
-        hexline::HexLine,
-        parser_helper::{validate_reserved, ReadExt, WriteExt},
-    },
+    parser::Decoder,
+    snp::types::{GuestPolicy, TcbVersion, Version},
+    util::{hexline::HexLine, parser_helper::validate_reserved},
     Generation,
 };
 
-pub use crate::snp::types::{
-    DerivedKey, GuestFieldSelect, GuestPolicy, KeyInfo, PlatformInfo, TcbVersion, Version,
-};
+use std::convert::TryFrom;
+use std::fmt::Display;
 
-#[cfg(feature = "serde")]
-use serde::{Deserialize, Serialize};
-#[cfg(feature = "serde")]
-use serde_big_array::BigArray;
-
-use std::{
-    convert::TryFrom,
-    fmt::Display,
-    io::{Read, Write},
-};
-
-/// Identifies the firmware-defined format version of an SEV-SNP attestation report.
-///
-/// `ReportVariant` corresponds to the *report layout version* as emitted by
-/// platform firmware. The variant determines:
-///
-/// - Which fields are present in the report body
-/// - How certain fields are interpreted (e.g. TCB layout)
-/// - How platform generation is inferred
-///
-/// This enum is intentionally **narrow and explicit**: only variants currently
-/// understood by the library are represented. Any unknown or future report
-/// versions will be rejected during decoding.
-///
-/// ---
-///
-/// # Version Semantics
-///
-/// | Variant | Firmware Versions | Notes |
-/// |--------:|-------------------|-------|
-/// | `V2` | 2 | Pre-CPUID reports. Platform generation is inferred from the CHIP_ID field. |
-/// | `V3` | 3, 4 | Introduces CPUID fields used for platform identification. |
-/// | `V5` | 5 | Adds mitigation vector fields and additional reserved regions. |
-///
-/// Firmware version values `3` and `4` are treated equivalently and both map to
-/// [`ReportVariant::V3`], as they share an identical report layout.
-///
-/// ---
-///
-/// # Security Considerations
-///
-/// `ReportVariant` only describes the *format* of the report. It does **not**
-/// imply that the report is authentic or trustworthy.
-///
-/// A parsed `ReportVariant` must not be used as a trust signal on its own.
-/// Authenticity is only established after successful cryptographic verification
-/// of the report signature.
-///
-/// ---
-///
-/// # Parsing and Validation
-///
-/// `ReportVariant` is decoded from the first 4 bytes of the report body and
-/// validated during parsing. Unsupported or unknown version values will cause
-/// parsing to fail with an error.
-///
-/// This ensures forward compatibility is explicit and prevents accidental
-/// acceptance of report formats the library does not understand.
-///
-/// ---
-///
-/// # Correct Usage
-///
-/// `ReportVariant` is primarily consumed internally during report parsing to
-/// drive generation inference and conditional field handling.
-///
-/// Consumers should not attempt to construct `ReportVariant` values manually
-/// from untrusted inputs; instead, rely on decoding via [`ReportBody`] or
-/// verified [`Report`] processing.
-///
-/// ---
-///
-/// # Example
-///
-/// ```ignore
-/// let variant = ReportVariant::decode(&mut reader, ())?;
-///
-/// match variant {
-///     ReportVariant::V2 => { /* CHIP_ID-based inference */ }
-///     ReportVariant::V3 => { /* CPUID-based inference */ }
-///     ReportVariant::V5 => { /* mitigation vector fields present */ }
-/// }
-/// ```
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-#[repr(u32)]
-pub enum ReportVariant {
-    /// Version 2 of the attestation report format.
-    ///
-    /// This variant predates CPUID-based platform identification. Platform
-    /// generation is inferred heuristically from the CHIP_ID field.
-    V2 = 2,
-
-    /// Version 3 (and firmware version 4) of the attestation report format.
-    ///
-    /// Introduces CPUID family, model, and stepping fields, enabling explicit
-    /// platform identification. Firmware versions `3` and `4` share the same
-    /// report layout and are represented by this variant.
-    V3 = 3,
-
-    /// Version 5 of the attestation report format.
-    ///
-    /// Extends the V3 layout with mitigation vector fields and additional
-    /// reserved regions. Used by newer firmware revisions.
-    V5 = 5,
-}
-
-impl TryFrom<u32> for ReportVariant {
-    type Error = std::io::Error;
-
-    fn try_from(v: u32) -> Result<Self, Self::Error> {
-        match v {
-            2 => Ok(ReportVariant::V2),
-            3 | 4 => Ok(ReportVariant::V3),
-            5 => Ok(ReportVariant::V5),
-            unknown_variant => Err(std::io::Error::new(
-                std::io::ErrorKind::InvalidData,
-                format!("unsupported report variant: {}", unknown_variant),
-            )),
-        }
-    }
-}
-
-impl Encoder<()> for ReportVariant {
-    fn encode(&self, writer: &mut impl Write, _: ()) -> Result<(), std::io::Error> {
-        match self {
-            ReportVariant::V2 => writer.write_bytes(2u32, ())?,
-            ReportVariant::V3 => writer.write_bytes(3u32, ())?,
-            ReportVariant::V5 => writer.write_bytes(5u32, ())?,
-        };
-        Ok(())
-    }
-}
-
-impl Decoder<()> for ReportVariant {
-    fn decode(reader: &mut impl Read, _: ()) -> Result<Self, std::io::Error> {
-        let version: u32 = reader.read_bytes()?;
-        Self::try_from(version)
-    }
-}
-
-impl ByteParser<()> for ReportVariant {
-    type Bytes = [u8; 4];
-    const EXPECTED_LEN: Option<usize> = Some(4);
-}
-
-impl Display for ReportVariant {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ReportVariant::V2 => write!(f, "V2"),
-            ReportVariant::V3 => write!(f, "V3"),
-            ReportVariant::V5 => write!(f, "V5"),
-        }
-    }
-}
-
-/// A zero-copy view of a raw SEV-SNP attestation report.
-///
-/// This type splits the report into two byte slices:
-/// - `body`: the bytes covered by the report signature
-/// - `signature`: the firmware-provided signature bytes
-///
-/// `Report` does **not** imply authenticity or integrity. It is just a view over
-/// untrusted bytes. Consumers should verify the signature (using [`Verifiable`])
-/// before interpreting any fields from the body.
-///
-/// This design supports a two-phase workflow:
-/// 1) Parse the outer framing to locate the signed body and signature.
-/// 2) Verify the signature over `body`, then parse the verified body into
-///    [`ReportBody`] for typed access.
-///
-/// # Notes
-/// - `Report` borrows from the input buffer (`'a`), so the input bytes must
-///   outlive the `Report`.
-/// - The offsets used by [`Report::from_bytes`] assume the current fixed
-///   firmware report layout and size (1184 bytes).
-#[derive(Debug, Clone, Copy)]
-pub struct Report<'a> {
-    /// The signature algorithm used to sign the attestation report
-    pub algorithm: SignatureAlgorithm,
-    /// The bytes covered by the report signature (bytes 0x00 to 0x2A0).
-    pub body: &'a [u8],
-    /// The signature bytes (0x2A0..0x4A0).
-    pub signature: &'a [u8],
-}
-
-impl<'a> Report<'a> {
-    const REPORT_LEN: usize = 0x4A0; // 1184
-    const BODY_LEN: usize = 0x2A0; // bytes 0x000..=0x29F
-    const SIG_OFF: usize = 0x2A0;
-    const SIG_LEN: usize = 0x200; // bytes 0x2A0..=0x49F
-    const SIG_ALGO_OFF: usize = 0x34;
-    const SIG_ALGO_LEN: usize = 0x4;
-    /// Parse a raw attestation report into body and signature slices.
-    ///
-    /// This function performs **framing only**:
-    /// - validates the total report length
-    /// - returns borrowed slices for the signed body and signature
-    ///
-    /// It does **not** verify the signature or validate reserved fields.
-    /// Use [`ReportBody::try_from`] (with a certificate or chain) to obtain a
-    /// verified [`ReportBody`].
-    pub fn from_bytes(report: &'a [u8]) -> std::io::Result<Self> {
-        if report.len() != Self::REPORT_LEN {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::InvalidData,
-                "Bad report length",
-            ));
-        };
-
-        let algorithm = SignatureAlgorithm::decode(
-            &mut &report[Self::SIG_ALGO_OFF..Self::SIG_ALGO_OFF + Self::SIG_ALGO_LEN],
-            (),
-        )?;
-
-        Ok(Self {
-            algorithm,
-            body: &report[..Self::BODY_LEN],
-            signature: &report[Self::SIG_OFF..Self::SIG_OFF + Self::SIG_LEN],
-        })
-    }
-}
-
-#[cfg(any(feature = "openssl", feature = "crypto_nossl"))]
-impl Verifiable for (&Certificate, &Report<'_>) {
-    type Output = ();
-
-    fn verify(self) -> Result<Self::Output, std::io::Error> {
-        let (vek, report) = self;
-
-        let algo = report.algorithm;
-
-        (algo, report.body, report.signature, vek).verify()
-    }
-}
-
-#[cfg(any(feature = "openssl", feature = "crypto_nossl"))]
-impl Verifiable for (&Chain, &Report<'_>) {
-    type Output = ();
-
-    fn verify(self) -> Result<(), std::io::Error> {
-        let (chain, report) = self;
-        let vek = chain.verify()?;
-        (vek, report).verify()
-    }
-}
-
-#[cfg(any(feature = "openssl", feature = "crypto_nossl"))]
-/// Verifies `report` with `vek` and returns a parsed [`ReportBody`].
-impl<'a> TryFrom<(&Report<'a>, &Certificate)> for ReportBody<'a> {
-    type Error = std::io::Error;
-
-    fn try_from((report, vek): (&Report<'a>, &Certificate)) -> Result<Self, Self::Error> {
-        (vek, report).verify()?;
-        ReportBody::from_bytes(report.body)
-    }
-}
-
-#[cfg(any(feature = "openssl", feature = "crypto_nossl"))]
-/// Verifies `report` with `chain` and returns a parsed [`ReportBody`].
-///
-/// This is the **recommended** way to obtain a `ReportBody`, because it
-/// enforces signature verification before parsing typed fields.
-impl<'a> TryFrom<(&Report<'a>, &Chain)> for ReportBody<'a> {
-    type Error = std::io::Error;
-
-    fn try_from((report, chain): (&Report<'a>, &Chain)) -> Result<Self, Self::Error> {
-        (chain, report).verify()?;
-        ReportBody::from_bytes(report.body)
-    }
-}
+use super::fields::{KeyInfo, PlatformInfo};
+use super::variant::ReportVariant;
 
 /// A zero-copy view of the attestation report body.
 /// All byte-arrayfields are borrowed from the original report body slice, so the input bytes must outlive this struct.
@@ -742,10 +468,12 @@ Current Mitigation Vector:    {}
 
 #[cfg(test)]
 mod tests {
-
+    use super::*;
     use std::ops::Range;
 
-    use super::*;
+    use crate::attestation::evidence::snp::Report;
+    use crate::certs::snp::signature::SignatureAlgorithm;
+
     const CHIP_ID_RANGE: Range<usize> = 0x1A0..0x1E0;
 
     #[test]
@@ -906,33 +634,6 @@ Current Mitigation Vector:    None
     }
 
     #[test]
-    fn test_report_copy() {
-        let mut bytes = vec![0u8; Report::REPORT_LEN];
-
-        // Setting sig algo
-        bytes[0x34..0x38].copy_from_slice(&1u32.to_le_bytes());
-
-        let report = Report::from_bytes(&bytes).unwrap();
-        let copy = report;
-
-        assert_eq!(report.body.as_ptr(), copy.body.as_ptr());
-        assert_eq!(report.body.len(), copy.body.len());
-        assert_eq!(report.signature.as_ptr(), copy.signature.as_ptr());
-        assert_eq!(report.signature.len(), copy.signature.len());
-    }
-
-    #[test]
-    fn test_version_extraction() {
-        let raw_v2 = [2, 0, 0, 0]; // Version 2
-        let version = u32::from_le_bytes([raw_v2[0], raw_v2[1], raw_v2[2], raw_v2[3]]);
-        assert_eq!(version, 2);
-
-        let raw_v3 = [3, 0, 0, 0]; // Version 3
-        let version = u32::from_le_bytes([raw_v3[0], raw_v3[1], raw_v3[2], raw_v3[3]]);
-        assert_eq!(version, 3);
-    }
-
-    #[test]
     fn test_report_body_selected_fields() {
         let mut bytes = vec![0u8; Report::REPORT_LEN];
 
@@ -965,34 +666,6 @@ Current Mitigation Vector:    None
         assert_eq!(body.vmpl, 3);
         assert_eq!(body.measurement, &[0u8; 48]);
         assert_eq!(body.sig_algo, SignatureAlgorithm::EcdsaSecp384r1)
-    }
-
-    #[test]
-    fn test_report_from_bytes_ok() {
-        let mut bytes = vec![0u8; Report::REPORT_LEN];
-        bytes[0x00..0x04].copy_from_slice(&2u32.to_le_bytes()); // v2
-        bytes[CHIP_ID_RANGE.start] = 1; // unmask chip id
-
-        // signature algorithm
-        bytes[0x34..0x38].copy_from_slice(&1u32.to_le_bytes());
-
-        // policy u64 LE at 0x08..0x10
-        let policy_raw = 1u64 << 17; // RMB1 bit
-        bytes[0x08..0x10].copy_from_slice(&policy_raw.to_le_bytes());
-
-        let report = Report::from_bytes(bytes.as_slice());
-        assert!(report.is_ok());
-
-        // Also ensure the body can be parsed
-        let report = report.unwrap();
-        assert!(ReportBody::from_bytes(report.body).is_ok());
-    }
-
-    #[test]
-    fn test_report_from_bytes_rejects_bad_len() {
-        let bytes = vec![0u8; Report::REPORT_LEN - 1];
-        let err = Report::from_bytes(&bytes).unwrap_err();
-        assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
     }
 
     #[test]
@@ -1091,33 +764,6 @@ Current Mitigation Vector:    None
         let report = Report::from_bytes(&bytes).unwrap();
         let err = ReportBody::from_bytes(report.body).unwrap_err();
         assert!(err.to_string().contains("Chip ID is masked"));
-    }
-
-    #[test]
-    fn test_report_from_bytes_splits_body_and_signature() {
-        let mut bytes = vec![0u8; Report::REPORT_LEN];
-
-        // signature algorithm
-        bytes[0x34..0x38].copy_from_slice(&1u32.to_le_bytes());
-
-        let r = Report::from_bytes(&bytes).unwrap();
-
-        assert_eq!(r.body.len(), 0x2a0);
-        assert_eq!(r.signature.len(), 0x49f + 1 - 0x2a0);
-        assert_eq!(r.body.as_ptr(), bytes.as_ptr());
-        assert_eq!(
-            r.signature.as_ptr() as usize - bytes.as_ptr() as usize,
-            0x2a0
-        );
-    }
-
-    #[test]
-    fn test_report_variant_tryfrom() {
-        assert_eq!(ReportVariant::try_from(2).unwrap(), ReportVariant::V2);
-        assert_eq!(ReportVariant::try_from(3).unwrap(), ReportVariant::V3);
-        assert_eq!(ReportVariant::try_from(4).unwrap(), ReportVariant::V3);
-        assert_eq!(ReportVariant::try_from(5).unwrap(), ReportVariant::V5);
-        assert!(ReportVariant::try_from(99).is_err());
     }
 
     #[test]
