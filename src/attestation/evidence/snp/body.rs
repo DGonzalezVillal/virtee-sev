@@ -21,13 +21,15 @@ use super::variant::ReportVariant;
 /// All fields are parsed to their final types at [`ReportBody::from_bytes`] time, including
 /// TCB version parsing with generation-aware layout selection.
 ///
-/// The correct method to generate [`ReportBody`] is from a [`Report`]:
+/// The correct method to generate a verified [`ReportBody`] is from a
+/// [`Report`](super::Report) via [`crate::attestation::verifier`]:
 /// ```ignore
-/// let report = Report::from_bytes(&raw_bytes);
-/// let body = ReportBody::try_from((&report, &vek))
+/// let report = Report::from_bytes(&raw_bytes)?;
+/// let body = ReportBody::try_from((&report, &vek))?;
 /// ```
 ///
-/// This will verify the signature and body of the report before parsing it into fully typed fields.
+/// This will verify the signature and body of the report before parsing it into
+/// fully typed fields.
 ///
 /// [`ReportBody::from_bytes`] can be used to parse the body from raw bytes, but this should be done for debugging purposes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -138,7 +140,8 @@ impl<'a> ReportBody<'a> {
     /// # Correct Usage
     ///
     /// The **recommended and correct way** to obtain a [`ReportBody`] is via
-    /// the `TryFrom` implementation that verifies the report signature first:
+    /// [`crate::attestation::verifier`], which verifies the report signature
+    /// first:
     ///
     /// ```ignore
     /// let report = Report::from_bytes(&raw_bytes)?;

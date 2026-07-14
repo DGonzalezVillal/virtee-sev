@@ -16,6 +16,8 @@ All notable changes to this project will be documented in this file.
 - Introduced the `attestation` module with `attestation::evidence::snp` for
   SNP attestation report types (`Report`, `ReportBody`, `ReportVariant`,
   `KeyInfo`, `PlatformInfo`).
+- Introduced `attestation::verifier::snp` for SNP report signature
+  verification and the verified `ReportBody` conversion path.
 
 ### Changed
 
@@ -30,6 +32,9 @@ All notable changes to this project will be documented in this file.
 - Moved `Report`, `ReportBody`, and `ReportVariant` from the guest firmware
   path into `attestation::evidence::snp`, split across `report`, `body`, and
   `variant` submodules. Flat re-exports at `attestation` are unchanged.
+- Moved SNP report verification (`Verifiable` impls and verified
+  `ReportBody` `TryFrom` paths) from `attestation::evidence::snp::report` into
+  `attestation::verifier::snp`. Evidence retains framing and parse-only APIs.
 - Removed the `firmware::guest::types` shim. `firmware::guest` now holds only
   the guest device API (`Firmware`) and re-exports `DerivedKey` and
   `GuestFieldSelect` for the Linux ioctl layer.

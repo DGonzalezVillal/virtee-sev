@@ -1,8 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
 
-#[cfg(any(feature = "openssl", feature = "crypto_nossl"))]
-use crate::certs::snp::{Certificate, Chain, Verifiable};
-
 use crate::{certs::snp::signature::SignatureAlgorithm, parser::Decoder};
 
 /// A zero-copy view of a raw SEV-SNP attestation report.
@@ -12,13 +9,14 @@ use crate::{certs::snp::signature::SignatureAlgorithm, parser::Decoder};
 /// - `signature`: the firmware-provided signature bytes
 ///
 /// `Report` does **not** imply authenticity or integrity. It is just a view over
-/// untrusted bytes. Consumers should verify the signature (using [`Verifiable`])
-/// before interpreting any fields from the body.
+/// untrusted bytes. Consumers should verify the signature (via
+/// [`crate::attestation::verifier`]) before interpreting any fields from the
+/// body.
 ///
 /// This design supports a two-phase workflow:
 /// 1) Parse the outer framing to locate the signed body and signature.
 /// 2) Verify the signature over `body`, then parse the verified body into
-///    [`ReportBody`] for typed access.
+///    [`ReportBody`](super::ReportBody) for typed access.
 ///
 /// # Notes
 /// - `Report` borrows from the input buffer (`'a`), so the input bytes must
@@ -50,8 +48,9 @@ impl<'a> Report<'a> {
     /// - returns borrowed slices for the signed body and signature
     ///
     /// It does **not** verify the signature or validate reserved fields.
-    /// Use [`ReportBody::try_from`] (with a certificate or chain) to obtain a
-    /// verified [`ReportBody`].
+    /// Use [`ReportBody::try_from`](super::ReportBody) (with a certificate or
+    /// chain) via [`crate::attestation::verifier`] to obtain a verified
+    /// [`ReportBody`](super::ReportBody).
     pub fn from_bytes(report: &'a [u8]) -> std::io::Result<Self> {
         if report.len() != Self::REPORT_LEN {
             return Err(std::io::Error::new(
@@ -70,55 +69,6 @@ impl<'a> Report<'a> {
             body: &report[..Self::BODY_LEN],
             signature: &report[Self::SIG_OFF..Self::SIG_OFF + Self::SIG_LEN],
         })
-    }
-}
-
-#[cfg(any(feature = "openssl", feature = "crypto_nossl"))]
-impl Verifiable for (&Certificate, &Report<'_>) {
-    type Output = ();
-
-    fn verify(self) -> Result<Self::Output, std::io::Error> {
-        let (vek, report) = self;
-
-        let algo = report.algorithm;
-
-        (algo, report.body, report.signature, vek).verify()
-    }
-}
-
-#[cfg(any(feature = "openssl", feature = "crypto_nossl"))]
-impl Verifiable for (&Chain, &Report<'_>) {
-    type Output = ();
-
-    fn verify(self) -> Result<(), std::io::Error> {
-        let (chain, report) = self;
-        let vek = chain.verify()?;
-        (vek, report).verify()
-    }
-}
-
-#[cfg(any(feature = "openssl", feature = "crypto_nossl"))]
-impl<'a> TryFrom<(&Report<'a>, &Certificate)> for ReportBody<'a> {
-    type Error = std::io::Error;
-
-    /// Verifies `report` with `vek` and returns a parsed [`ReportBody`].
-    fn try_from((report, vek): (&Report<'a>, &Certificate)) -> Result<Self, Self::Error> {
-        (vek, report).verify()?;
-        ReportBody::from_bytes(report.body)
-    }
-}
-
-#[cfg(any(feature = "openssl", feature = "crypto_nossl"))]
-impl<'a> TryFrom<(&Report<'a>, &Chain)> for ReportBody<'a> {
-    type Error = std::io::Error;
-
-    /// Verifies `report` with `chain` and returns a parsed [`ReportBody`].
-    ///
-    /// This is the **recommended** way to obtain a `ReportBody`, because it
-    /// enforces signature verification before parsing typed fields.
-    fn try_from((report, chain): (&Report<'a>, &Chain)) -> Result<Self, Self::Error> {
-        (chain, report).verify()?;
-        ReportBody::from_bytes(report.body)
     }
 }
 
