@@ -18,6 +18,13 @@ All notable changes to this project will be documented in this file.
   `KeyInfo`, `PlatformInfo`).
 - Introduced `attestation::verifier::snp` for SNP report signature
   verification and the verified `ReportBody` conversion path.
+- Introduced `attestation::endorser::snp` for SNP endorsement chains
+  (`Certificate`, `Chain`, `ca`, `builtin`).
+- Moved the SNP `Verifiable` trait and all verification impls into
+  `attestation::verifier`.
+- Moved SNP report signature wire types (`SignatureAlgorithm`, `Signature`)
+  into `attestation::evidence::snp` and ECDSA verification into
+  `attestation::verifier::snp`.
 
 ### Changed
 
@@ -35,6 +42,13 @@ All notable changes to this project will be documented in this file.
 - Moved SNP report verification (`Verifiable` impls and verified
   `ReportBody` `TryFrom` paths) from `attestation::evidence::snp::report` into
   `attestation::verifier::snp`. Evidence retains framing and parse-only APIs.
+- Moved SNP certificate chain types (`Certificate`, `Chain`, `ca`, `builtin`)
+  from `certs::snp` into `attestation::endorser::snp`.
+- Moved the SNP `Verifiable` trait and verification impls (certificate,
+  chain, report signature, and report appraisal) into
+  `attestation::verifier`.
+- Removed `certs::snp`. SNP attestation now lives entirely under
+  `attestation`; `certs` is legacy SEV only (`feature = "sev"`).
 - Removed the `firmware::guest::types` shim. `firmware::guest` now holds only
   the guest device API (`Firmware`) and re-exports `DerivedKey` and
   `GuestFieldSelect` for the Linux ioctl layer.

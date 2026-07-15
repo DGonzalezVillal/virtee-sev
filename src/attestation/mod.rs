@@ -5,6 +5,12 @@
 pub mod evidence;
 
 #[cfg(any(feature = "openssl", feature = "crypto_nossl"))]
+pub mod endorser;
+
+#[cfg(any(feature = "openssl", feature = "crypto_nossl"))]
 pub mod verifier;
 
-pub use evidence::snp::{KeyInfo, PlatformInfo, Report, ReportBody, ReportVariant};
+#[cfg(any(feature = "openssl", feature = "crypto_nossl"))]
+pub use verifier::Verifiable;
+
+pub use evidence::snp::{KeyInfo, PlatformInfo, Report, ReportBody, ReportVariant, Signature, SignatureAlgorithm};

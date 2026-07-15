@@ -19,10 +19,11 @@ pub fn ask() -> Result<Certificate> {
 }
 
 mod tests {
+    use super::*;
+    use crate::attestation::verifier::Verifiable;
+
     #[test]
     fn ark_self_signed() {
-        use super::*;
-
         let ark = ark().unwrap();
 
         (&ark, &ark).verify().unwrap();
@@ -30,8 +31,6 @@ mod tests {
 
     #[test]
     fn ark_signs_ask() {
-        use super::*;
-
         let ark = ark().unwrap();
         let ask = ask().unwrap();
 

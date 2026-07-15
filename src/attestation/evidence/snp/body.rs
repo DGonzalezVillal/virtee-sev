@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    certs::snp::signature::SignatureAlgorithm,
+    attestation::evidence::snp::SignatureAlgorithm,
     parser::Decoder,
     snp::types::{GuestPolicy, TcbVersion, Version},
     util::{hexline::HexLine, parser_helper::validate_reserved},
@@ -475,7 +475,7 @@ mod tests {
     use std::ops::Range;
 
     use crate::attestation::evidence::snp::Report;
-    use crate::certs::snp::signature::SignatureAlgorithm;
+    use crate::attestation::evidence::snp::SignatureAlgorithm;
 
     const CHIP_ID_RANGE: Range<usize> = 0x1A0..0x1E0;
 

@@ -27,7 +27,8 @@ mod snp {
 
     use std::convert::TryFrom;
 
-    use sev::certs::snp::{builtin::milan, ca, Certificate, Chain, Verifiable};
+    use sev::attestation::endorser::snp::{builtin::milan, ca, Certificate, Chain};
+    use sev::attestation::verifier::Verifiable;
 
     const TEST_MILAN_VCEK_DER: &[u8] = include_bytes!("certs_data/vcek_milan.der");
 

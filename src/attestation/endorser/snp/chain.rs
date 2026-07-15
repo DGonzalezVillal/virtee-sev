@@ -18,20 +18,6 @@ pub struct Chain {
     pub vek: Certificate,
 }
 
-impl<'a> Verifiable for &'a Chain {
-    type Output = &'a Certificate;
-
-    fn verify(self) -> Result<Self::Output> {
-        // Verify that ARK is self-signed and ARK signs ASK.
-        let ask = self.ca.verify()?;
-
-        // Verify that ASK signs VCEK.
-        (ask, &self.vek).verify()?;
-
-        Ok(&self.vek)
-    }
-}
-
 /// The format in which the FFI Certificate bytes are formatted.
 enum ChainEncodingFormat {
     /// DER-encoded.

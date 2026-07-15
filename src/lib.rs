@@ -138,7 +138,7 @@ use certs::sev::ca::{Certificate, Chain as CertSevCaChain};
     feature = "snp",
     any(feature = "openssl", feature = "crypto_nossl")
 ))]
-use certs::snp::ca::Chain as CertSnpCaChain;
+use attestation::endorser::snp::ca::Chain as CertSnpCaChain;
 
 #[cfg(feature = "sev")]
 use certs::sev::builtin as SevBuiltin;
@@ -148,7 +148,7 @@ use certs::sev::builtin as SevBuiltin;
     feature = "snp",
     any(feature = "openssl", feature = "crypto_nossl")
 ))]
-use certs::snp::builtin as SnpBuiltin;
+use attestation::endorser::snp::builtin as SnpBuiltin;
 
 #[cfg(any(feature = "sev", feature = "snp"))]
 use std::convert::TryFrom;

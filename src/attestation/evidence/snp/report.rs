@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{certs::snp::signature::SignatureAlgorithm, parser::Decoder};
+use crate::{
+    attestation::evidence::snp::SignatureAlgorithm,
+    parser::Decoder,
+};
 
 /// A zero-copy view of a raw SEV-SNP attestation report.
 ///

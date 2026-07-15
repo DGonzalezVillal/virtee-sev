@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::attestation::endorser::snp::{Certificate, Chain};
 use crate::attestation::evidence::snp::{Report, ReportBody};
-use crate::certs::snp::{Certificate, Chain, Verifiable};
+use crate::attestation::verifier::Verifiable;
 
 impl Verifiable for (&Certificate, &Report<'_>) {
     type Output = ();

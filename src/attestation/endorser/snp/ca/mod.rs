@@ -16,21 +16,6 @@ pub struct Chain {
     pub ask: Certificate,
 }
 
-/// Verify if a CA chain's ARK is self-signed, along with if the ARK signs the ASK.
-impl<'a> Verifiable for &'a Chain {
-    type Output = &'a Certificate;
-
-    fn verify(self) -> Result<Self::Output> {
-        // Verify that ARK is self-signed.
-        (&self.ark, &self.ark).verify()?;
-
-        // Verify that ARK signs ASK.
-        (&self.ark, &self.ask).verify()?;
-
-        Ok(&self.ask)
-    }
-}
-
 #[cfg(feature = "openssl")]
 impl From<(X509, X509)> for Chain {
     /// Assumes the structure of ASK/ARK or ASVK/ARK
@@ -135,7 +120,8 @@ impl Chain {
 mod tests {
     #[test]
     fn milan_ca_chain_verifiable() {
-        use crate::certs::snp::{builtin::milan, ca::*, Verifiable};
+        use crate::attestation::endorser::snp::{builtin::milan, ca::*};
+        use crate::attestation::verifier::Verifiable;
 
         let chain = Chain {
             ark: milan::ark().unwrap(),
@@ -147,7 +133,8 @@ mod tests {
 
     #[test]
     fn genoa_ca_chain_verifiable() {
-        use crate::certs::snp::{builtin::genoa, ca::*, Verifiable};
+        use crate::attestation::endorser::snp::{builtin::genoa, ca::*};
+        use crate::attestation::verifier::Verifiable;
 
         let chain = Chain {
             ark: genoa::ark().unwrap(),

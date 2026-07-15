@@ -3,7 +3,3 @@
 /// Legacy SEV certificates.
 #[cfg(feature = "sev")]
 pub mod sev;
-
-/// SEV-SNP certificates.
-#[cfg(feature = "snp")]
-pub mod snp;
