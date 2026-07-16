@@ -25,6 +25,8 @@ All notable changes to this project will be documented in this file.
 - Moved SNP report signature wire types (`SignatureAlgorithm`, `Signature`)
   into `attestation::evidence::snp` and ECDSA verification into
   `attestation::verifier::snp`.
+- Introduced `attestation::attester::snp` for the SNP guest attester role
+  (`attestation::attester::snp::Firmware`).
 
 ### Changed
 
@@ -49,9 +51,10 @@ All notable changes to this project will be documented in this file.
   `attestation::verifier`.
 - Removed `certs::snp`. SNP attestation now lives entirely under
   `attestation`; `certs` is legacy SEV only (`feature = "sev"`).
-- Removed the `firmware::guest::types` shim. `firmware::guest` now holds only
-  the guest device API (`Firmware`) and re-exports `DerivedKey` and
-  `GuestFieldSelect` for the Linux ioctl layer.
+- Removed the `firmware::guest::types` shim. Guest attestation device access
+  moved to `attestation::attester::snp::Firmware`.
+- Moved SNP guest firmware ioctl definitions from `firmware::linux::guest`
+  into `firmware::guest`.
 - Removed legacy `sev` from the crate's default features. Defaults are now
   `snp` only, so SNP attestation and verification can be built on non-x86_64
   targets without pulling in first-generation SEV code. Enable the `sev`

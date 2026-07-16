@@ -2,7 +2,7 @@
 
 #![cfg(all(feature = "snp", target_os = "linux"))]
 
-use sev::firmware::guest::Firmware;
+use sev::attestation::Firmware;
 use sev::snp::types::{DerivedKey, GuestFieldSelect};
 
 #[cfg_attr(not(guest), ignore)]

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::firmware::linux::guest::types::{
+use crate::firmware::guest::types::{
     DerivedKeyReq, DerivedKeyRsp, ExtReportReq, ReportReq, ReportRsp,
 };
 

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{error::*, firmware::guest::*};
+use crate::{error::*, snp::types::{DerivedKey, GuestFieldSelect}};
 
 use static_assertions::const_assert;
 
@@ -139,7 +139,8 @@ impl Default for ReportReq {
 }
 
 impl ReportReq {
-    /// Instantiates a new [ReportReq](self::ReportReq) for fetching an [AttestationReport](crate::firmware::guest::types::snp::AttestationReport) from the PSP.
+    /// Instantiates a new [ReportReq](self::ReportReq) for fetching an attestation
+    /// report from the PSP.
     ///
     /// # Arguments
     ///
@@ -178,7 +179,7 @@ const REPORT_SIZE: usize = 1184usize;
 /// ------------
 ///   4096 Bytes (4K Memory Page Alignment)
 /// ```
-/// <sup>*[Message Header - 8.26 SNP_GUEST_REQUEST - Table 97](<https://www.amd.com/system/files/TechDocs/56860.pdf#page=113>)</sup>
+/// <sup>*[Message Header - 8.26 SNP_GUEST_REQUEST - Table 97](<https://www.amd.com/content/dam/amd/en/documents/epyc-technical-docs/specifications/56860.pdf#page=113>)</sup>
 ///
 /// <sup>*[Encrypted Message - sev-guest.h](<https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/uapi/linux/sev-guest.h>)</sup>
 #[derive(Clone, Copy)]
@@ -224,7 +225,8 @@ impl Default for ReportRsp {
 #[cfg(test)]
 mod test {
     mod snp_report_req {
-        use crate::firmware::linux::guest::types::ReportReq;
+        use super::super::ReportReq;
+
         #[test]
         pub fn test_new() {
             let report_data: [u8; 64] = [
