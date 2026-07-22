@@ -94,14 +94,13 @@ pub fn verify_ecdsa_signature(body: &[u8], signature: &[u8], vek: &Certificate) 
             ))
         })?;
     use p384::ecdsa::signature::DigestVerifier;
-    verifying_key.verify_digest(base_digest, &sig).map_err(|e| {
-        Error::other(format!("VEK does not sign the attestation report: {e:?}"))
-    })
+    verifying_key
+        .verify_digest(base_digest, &sig)
+        .map_err(|e| Error::other(format!("VEK does not sign the attestation report: {e:?}")))
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::attestation::evidence::snp::Signature;
 
     #[cfg(feature = "openssl")]
@@ -144,10 +143,7 @@ mod tests {
 
         #[test]
         fn test_try_into_p384_signature() {
-            let sig = Signature {
-                r: [1u8; 72],
-                s: [2u8; 72],
-            };
+            let sig = Signature::new([1u8; 72], [2u8; 72]);
             let p384_sig: p384::ecdsa::Signature = (&sig).try_into().unwrap();
             assert_eq!(p384_sig.r().to_bytes().as_slice(), &[1u8; 48]);
             assert_eq!(p384_sig.s().to_bytes().as_slice(), &[2u8; 48]);

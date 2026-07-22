@@ -3,12 +3,12 @@
 use crate::attestation::endorser::snp::Certificate;
 use crate::attestation::verifier::Verifiable;
 
-use der::{referenced::OwnedToRef, Encode};
 use rsa::signature;
 use signature::Verifier;
-use spki::ObjectIdentifier;
 use std::convert::TryFrom;
 use std::io::{self, ErrorKind, Result};
+use x509_cert::der::{referenced::OwnedToRef, Encode};
+use x509_cert::spki::ObjectIdentifier;
 
 const RSA_SSA_PSS_OID: ObjectIdentifier = ObjectIdentifier::new_unwrap("1.2.840.113549.1.1.10");
 
@@ -17,8 +17,8 @@ impl Verifiable for (&Certificate, &Certificate) {
     type Output = ();
 
     fn verify(self) -> Result<Self::Output> {
-        let signer = &self.0 .0;
-        let signee = &self.1 .0;
+        let signer: x509_cert::Certificate = self.0.into();
+        let signee: x509_cert::Certificate = self.1.into();
 
         if signee.signature_algorithm.oid != RSA_SSA_PSS_OID {
             return Err(io_error_other(format!(

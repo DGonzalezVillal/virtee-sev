@@ -12,6 +12,33 @@ use x509_cert::der;
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Certificate(x509_cert::Certificate);
 
+/// Wrap an X509 certificate into a Certificate.
+impl From<x509_cert::Certificate> for Certificate {
+    fn from(cert: x509_cert::Certificate) -> Self {
+        Self(cert)
+    }
+}
+
+/// Unwrap the underlying X509 certificate from a Certificate.
+impl From<Certificate> for x509_cert::Certificate {
+    fn from(cert: Certificate) -> Self {
+        cert.0
+    }
+}
+
+/// Clone the underlying X509 certificate from a reference to a Certificate.
+impl From<&Certificate> for x509_cert::Certificate {
+    fn from(cert: &Certificate) -> Self {
+        cert.0.clone()
+    }
+}
+
+impl From<&x509_cert::Certificate> for Certificate {
+    fn from(value: &x509_cert::Certificate) -> Self {
+        Self(value.clone())
+    }
+}
+
 impl Certificate {
     /// Create a Certificate from a PEM-encoded X509 structure.
     pub fn from_pem(pem: &[u8]) -> Result<Self> {
