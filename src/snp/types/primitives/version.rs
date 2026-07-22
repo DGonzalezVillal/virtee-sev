@@ -4,10 +4,10 @@ use crate::{
     parser::{ByteParser, Decoder, Encoder},
     util::parser_helper::{ReadExt, WriteExt},
 };
-use std::io::{Read, Write};
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
+use std::io::{Read, Write};
 
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -64,7 +64,6 @@ impl ByteParser<()> for Version {
     type Bytes = [u8; 3];
     const EXPECTED_LEN: Option<usize> = Some(3);
 }
-
 
 #[cfg(test)]
 mod tests {

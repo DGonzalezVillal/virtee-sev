@@ -1,16 +1,18 @@
 // SPDX-License-Identifier: Apache-2.0
 
-//! Operations to handle ovmf data
-use crate::error::*;
-use crate::parser::{ByteParser, Decoder, Encoder};
-use crate::util::parser_helper::{ReadExt, WriteExt};
+//! OVMF SEV metadata wire types and firmware image parser.
+
+use crate::{
+    error::{MeasurementError, OVMFError},
+    parser::{ByteParser, Decoder, Encoder},
+    util::parser_helper::{ReadExt, WriteExt},
+};
 use byteorder::{ByteOrder, LittleEndian};
-use std::io::Write;
 use std::{
     collections::HashMap,
     convert::{TryFrom, TryInto},
     fs::File,
-    io::Read,
+    io::{Read, Write},
     path::PathBuf,
 };
 use uuid::{uuid, Uuid};
@@ -18,8 +20,8 @@ use uuid::{uuid, Uuid};
 #[cfg(feature = "serde")]
 use serde::Deserialize;
 
-/// Convert a UUID into a little endian slice
-pub fn guid_le_to_slice(guid: &str) -> Result<[u8; 16], MeasurementError> {
+/// Convert a UUID string into a little-endian byte slice.
+pub(crate) fn guid_le_to_slice(guid: &str) -> Result<[u8; 16], MeasurementError> {
     let guid = Uuid::try_from(guid)?;
     let guid = guid.to_bytes_le();
     let guid = guid.as_slice();
@@ -139,7 +141,7 @@ impl ByteParser<()> for OvmfSevMetadataSectionDesc {
 }
 
 impl OvmfSevMetadataSectionDesc {
-    fn bytes_from_offset(value: &[u8], offset: usize) -> Result<Self, std::io::Error> {
+    pub(crate) fn bytes_from_offset(value: &[u8], offset: usize) -> Result<Self, std::io::Error> {
         let mut bytes = &value[offset..offset + std::mem::size_of::<OvmfSevMetadataSectionDesc>()];
         let decoded = Self::decode(&mut bytes, ())?;
 
@@ -151,15 +153,15 @@ impl OvmfSevMetadataSectionDesc {
 #[repr(C)]
 #[cfg_attr(feature = "serde", derive(Deserialize))]
 #[derive(Debug, Clone, Copy)]
-struct OvmfSevMetadataHeader {
+pub(crate) struct OvmfSevMetadataHeader {
     /// Header Signature
     signature: [u8; 4],
     /// Size
-    size: u32,
+    pub(crate) size: u32,
     /// Version
     version: u32,
     /// Number of items
-    num_items: u32,
+    pub(crate) num_items: u32,
 }
 
 impl Encoder<()> for OvmfSevMetadataHeader {
@@ -194,7 +196,7 @@ impl ByteParser<()> for OvmfSevMetadataHeader {
 }
 
 impl OvmfSevMetadataHeader {
-    fn bytes_from_offset(value: &[u8], offset: usize) -> Result<Self, std::io::Error> {
+    pub(crate) fn bytes_from_offset(value: &[u8], offset: usize) -> Result<Self, std::io::Error> {
         let mut bytes = &value[offset..offset + std::mem::size_of::<OvmfSevMetadataHeader>()];
         let decoded = Self::decode(&mut bytes, ())?;
 
@@ -202,7 +204,7 @@ impl OvmfSevMetadataHeader {
     }
 
     /// Verify Header Signature
-    fn verify(&self) -> Result<(), OVMFError> {
+    pub(crate) fn verify(&self) -> Result<(), OVMFError> {
         let expected_signature: &[u8] = b"ASEV";
         if !self.signature.eq(expected_signature) {
             return Err(OVMFError::SEVMetadataVerification("signature".to_string()));
@@ -219,11 +221,11 @@ impl OvmfSevMetadataHeader {
 /// OVMF Footer
 #[repr(C, packed)]
 #[derive(Debug, Clone, Copy)]
-struct OvmfFooterTableEntry {
+pub(crate) struct OvmfFooterTableEntry {
     /// Size
-    size: u16,
+    pub(crate) size: u16,
     /// GUID
-    guid: [u8; 16],
+    pub(crate) guid: [u8; 16],
 }
 
 impl TryFrom<&[u8]> for OvmfFooterTableEntry {
@@ -246,7 +248,7 @@ const SEV_HASH_TABLE_RV_GUID: Uuid = uuid!("7255371f-3a3b-4b04-927b-1da6efa8d454
 const SEV_ES_RESET_BLOCK_GUID: Uuid = uuid!("00f771de-1a7e-4fcb-890e-68c77e2fb44e");
 const OVMF_SEV_META_DATA_GUID: Uuid = uuid!("dc886566-984a-4798-a75e-5585a7bf67cc");
 
-/// OVMF Structure
+/// Parsed OVMF firmware image with SEV metadata and footer tables.
 pub struct OVMF {
     /// OVMF data
     data: Vec<u8>,
@@ -257,7 +259,7 @@ pub struct OVMF {
 }
 
 impl OVMF {
-    /// Generate new OVMF structure by parsing the footer table and SEV metadata
+    /// Parse an OVMF firmware image from disk.
     pub fn new(ovmf_file: PathBuf) -> Result<Self, MeasurementError> {
         let mut data = Vec::new();
         let mut file = match File::open(ovmf_file) {
@@ -279,40 +281,39 @@ impl OVMF {
         Ok(ovmf)
     }
 
-    /// Grab OVMF data
+    /// Returns the raw OVMF firmware bytes.
     pub fn data(&self) -> &Vec<u8> {
         &self.data
     }
 
-    /// Calculate OVMF GPA
+    /// Returns the guest physical address where OVMF is loaded.
     pub fn gpa(&self) -> u64 {
         FOUR_GB - self.data.len() as u64
     }
 
-    /// Get an item from the OVMF table
     fn table_item(&self, guid: &Uuid) -> Option<&Vec<u8>> {
         self.table.get(guid)
     }
 
-    /// Get the OVMF metadata items
+    /// Returns parsed SEV metadata section descriptors.
     pub fn metadata_items(&self) -> &Vec<OvmfSevMetadataSectionDesc> {
         &self.metadata_items
     }
 
-    /// Check if the metadata items have the desired section
+    /// Returns whether the metadata contains the given section type.
     pub fn has_metadata_section(&self, section_type: SectionType) -> bool {
         self.metadata_items()
             .iter()
             .any(|s| s.section_type == section_type)
     }
 
-    /// Check that the table supports SEV hashes
+    /// Returns whether the firmware footer includes a SEV hashes table.
     pub fn is_sev_hashes_table_supported(&self) -> bool {
         self.table.contains_key(&SEV_HASH_TABLE_RV_GUID)
             && self.sev_hashes_table_gpa().unwrap_or(0) != 0
     }
 
-    /// Get the SEV HASHES GPA
+    /// Returns the guest physical address of the SEV hashes table.
     pub fn sev_hashes_table_gpa(&self) -> Result<u64, OVMFError> {
         if !self.table.contains_key(&SEV_HASH_TABLE_RV_GUID) {
             return Err(OVMFError::EntryMissingInTable(
@@ -331,7 +332,7 @@ impl OVMF {
         }
     }
 
-    /// Get the SEV-ES EIP
+    /// Returns the SEV-ES reset EIP from the firmware footer table.
     pub fn sev_es_reset_eip(&self) -> Result<u32, OVMFError> {
         if !self.table.contains_key(&SEV_ES_RESET_BLOCK_GUID) {
             return Err(OVMFError::EntryMissingInTable(
@@ -350,12 +351,10 @@ impl OVMF {
         }
     }
 
-    /// Parse footer table data
     fn parse_footer_table(&mut self) -> Result<(), MeasurementError> {
         self.table.clear();
         let size = self.data.len();
         const ENTRY_HEADER_SIZE: usize = std::mem::size_of::<OvmfFooterTableEntry>();
-        //The OVMF table ends 32 bytes before the end of the firmware binary
         let start_of_footer_table = size - 32 - ENTRY_HEADER_SIZE;
         let footer =
             OvmfFooterTableEntry::try_from(&self.data.as_slice()[start_of_footer_table..])?;
@@ -403,7 +402,6 @@ impl OVMF {
         Ok(())
     }
 
-    /// parse SEV metadata
     fn parse_sev_metadata(&mut self) -> Result<(), MeasurementError> {
         match self.table.get(&OVMF_SEV_META_DATA_GUID) {
             Some(entry) => {

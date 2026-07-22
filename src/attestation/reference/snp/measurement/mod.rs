@@ -1,107 +1,26 @@
 // SPDX-License-Identifier: Apache-2.0
 
-//! Operations to calculate guest measurement for different SEV modes
+//! SNP launch digest (GCTX) reference value calculation.
+
+pub mod gctx;
+
 use crate::{
+    attestation::reference::sev_hashes::SevHashes,
     error::*,
     launch::PageType,
-    measurement::{
-        gctx::{Gctx, Updating, VMSA_GPA},
-        ovmf::{OvmfSevMetadataSectionDesc, SectionType, OVMF},
-        sev_hashes::SevHashes,
-        vcpu_types::CpuType,
+    snp::types::launch::{
+        ovmf::{OVMF, OvmfSevMetadataSectionDesc, SectionType},
+        vcpu::CpuType,
         vmsa::{GuestFeatures, VMMType, VMSA},
     },
-    parser::{ByteParser, Decoder, Encoder},
-    util::parser_helper::{ReadExt, WriteExt},
+    snp::types::SnpLaunchDigest,
 };
 use hex::FromHex;
-use std::{
-    convert::{TryFrom, TryInto},
-    io::{Read, Write},
-};
-use std::{fmt, path::PathBuf};
+use std::path::PathBuf;
 
-#[cfg(feature = "serde")]
-use serde::{Deserialize, Serialize};
-
-#[cfg(feature = "serde")]
-use serde_big_array::BigArray;
+use self::gctx::{Gctx, Updating, VMSA_GPA};
 
 const _PAGE_MASK: u64 = 0xfff;
-
-/// Launch Digest sizes
-pub(crate) const LD_BITS: usize = 384;
-pub(crate) const LD_BYTES: usize = LD_BITS / 8;
-
-/// The expected launch digest of the guest
-#[repr(C)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive(Debug, Clone, Copy)]
-pub struct SnpLaunchDigest(#[cfg_attr(feature = "serde", serde(with = "BigArray"))] [u8; LD_BYTES]);
-
-impl Default for SnpLaunchDigest {
-    fn default() -> Self {
-        Self([0u8; LD_BYTES])
-    }
-}
-
-// Try from slice
-impl TryFrom<&[u8]> for SnpLaunchDigest {
-    type Error = MeasurementError;
-
-    fn try_from(bytes: &[u8]) -> Result<Self, MeasurementError> {
-        Ok(SnpLaunchDigest(bytes.try_into()?))
-    }
-}
-
-/// Vecotrize Launch Digest
-impl TryInto<Vec<u8>> for SnpLaunchDigest {
-    type Error = MeasurementError;
-
-    fn try_into(self) -> Result<Vec<u8>, MeasurementError> {
-        Ok((self.0).to_vec())
-    }
-}
-
-impl Encoder<()> for SnpLaunchDigest {
-    fn encode(&self, writer: &mut impl Write, _: ()) -> Result<(), std::io::Error> {
-        writer.write_bytes(self.0, ())?;
-        Ok(())
-    }
-}
-
-impl Decoder<()> for SnpLaunchDigest {
-    fn decode(reader: &mut impl Read, _: ()) -> Result<Self, std::io::Error> {
-        let ld = reader.read_bytes()?;
-        Ok(Self(ld))
-    }
-}
-
-impl ByteParser<()> for SnpLaunchDigest {
-    type Bytes = [u8; LD_BYTES];
-    const EXPECTED_LEN: Option<usize> = Some(LD_BYTES);
-}
-
-impl fmt::LowerHex for SnpLaunchDigest {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        for b in &self.0 {
-            write!(f, "{:02x}", b)?;
-        }
-        Ok(())
-    }
-}
-
-impl SnpLaunchDigest {
-    /// Create Launch Digest from large array
-    pub fn new(data: [u8; LD_BYTES]) -> Self {
-        Self(data)
-    }
-
-    /// Get the launch digest as a hex string
-    pub fn get_hex_ld(self) -> String {
-        format!("{:x}", self)
-    }
-}
 
 /// Update launch digest with SEV kernel hashes
 fn snp_update_kernel_hashes(

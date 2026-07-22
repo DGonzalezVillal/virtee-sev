@@ -325,7 +325,6 @@ impl From<u64> for GuestPolicy {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;

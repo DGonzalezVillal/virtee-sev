@@ -4,10 +4,10 @@
 
 #[cfg(all(target_os = "linux", feature = "snp"))]
 mod snp_tests {
-    use sev::measurement::{
-        snp::*,
-        vcpu_types::CpuType,
-        vmsa::{GuestFeatures, VMMType},
+    use sev::{
+        attestation::reference::snp::*,
+        snp::types::launch::vcpu::CpuType,
+        snp::types::launch::vmsa::{GuestFeatures, VMMType},
     };
 
     // Test if we can compute a full LD from a pre generated hash using snp only kernel
@@ -365,7 +365,10 @@ mod snp_tests {
 
 #[cfg(all(target_os = "linux", feature = "sev"))]
 mod sev_tests {
-    use sev::measurement::{sev::*, vcpu_types::CpuType};
+    use sev::{
+        attestation::reference::sev::*,
+        snp::types::launch::vcpu::CpuType,
+    };
     // test regular sev-es
     #[test]
     fn test_seves() {

@@ -27,6 +27,12 @@ All notable changes to this project will be documented in this file.
   `attestation::verifier::snp`.
 - Introduced `attestation::attester::snp` for the SNP guest attester role
   (`attestation::attester::snp::Firmware`).
+- Introduced `attestation::reference::snp::idblock` and
+  `attestation::reference::snp::measurement` for SNP ID block and launch
+  digest reference calculation. Shared helpers (`sev_hashes`) live directly
+  under `attestation::reference`.
+- Moved guest launch types into `snp::types::launch` (OVMF metadata layouts,
+  QEMU vCPU models, OVMF firmware parsing, and SEV-ES VMSA save-area pages).
 
 ### Changed
 
@@ -55,6 +61,21 @@ All notable changes to this project will be documented in this file.
   moved to `attestation::attester::snp::Firmware`.
 - Moved SNP guest firmware ioctl definitions from `firmware::linux::guest`
   into `firmware::guest`.
+- Moved SNP launch digest and ID block wire types into `snp::types`
+  (`SnpLaunchDigest`, `FamilyId`, `ImageId`, `IdBlock`, `IdAuth`, and related
+  ECDSA wire layouts). OpenSSL conversions remain in
+  `attestation::reference`.
+- Moved QEMU vCPU model types (`CpuType`, `cpu_sig`) into
+  `snp::types::launch::vcpu`. Removed `attestation::reference::vcpu_types`.
+- Reorganized `attestation::reference::snp` into `reference::snp::idblock`
+  and `reference::snp::measurement`. `IdMeasurements` lives in
+  `reference::snp::idblock`; wire types remain in `snp::types`. Removed
+  `reference::snp::idblock_types`.
+- Reorganized `attestation::reference` into `reference::snp` and
+  `reference::sev`. Shared helpers (`sev_hashes`, `digest`) live directly
+  under `attestation::reference`.
+- Removed the unused top-level `vmsa` module (superseded by
+  `snp::types::launch::vmsa`).
 - Removed legacy `sev` from the crate's default features. Defaults are now
   `snp` only, so SNP attestation and verification can be built on non-x86_64
   targets without pulling in first-generation SEV code. Enable the `sev`

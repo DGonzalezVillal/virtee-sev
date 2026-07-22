@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
-//! Exisiting AMD EPYC vCPUs
+//! QEMU vCPU model types used at guest launch.
+
 use std::{convert::TryFrom, fmt};
 
 use crate::error::MeasurementError;

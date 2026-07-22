@@ -2,22 +2,11 @@
 //! Operations to handle and create a Guest Context
 use std::convert::TryInto;
 
-#[cfg(feature = "openssl")]
-use openssl::sha::sha384;
-
-#[cfg(feature = "crypto_nossl")]
-fn sha384(data: &[u8]) -> [u8; 48] {
-    use sha2::Digest;
-    let hash = sha2::Sha384::digest(data);
-    let mut out = [0u8; 48];
-    out.copy_from_slice(&hash);
-    out
-}
-
 use crate::{
+    attestation::reference::digest::sha384,
     error::*,
     launch::PageType,
-    measurement::snp::{SnpLaunchDigest, LD_BYTES},
+    snp::types::{SnpLaunchDigest, LD_BYTES},
 };
 
 // VMSA page is recorded in the RMP table with GPA (u64)(-1).

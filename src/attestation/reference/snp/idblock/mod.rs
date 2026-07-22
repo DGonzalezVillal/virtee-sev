@@ -1,22 +1,34 @@
 // SPDX-License-Identifier: Apache-2.0
 
-//! Functions to use to calculate the ID-BLOCK and the AUTH-BLOCK.
+//! SNP ID block and AUTH block reference value calculation.
 
-use openssl::{ec::EcKey, pkey::Private, sha::sha384};
+#[cfg(feature = "openssl")]
+mod crypto;
+
+use openssl::{ec::EcKey, nid::Nid, pkey::Private, sha::sha384};
 use std::{convert::TryFrom, fs::File, io::Read, path::PathBuf};
 
 use crate::{
     error::IdBlockError,
-    snp::types::GuestPolicy,
-    measurement::{
-        idblock_types::{
-            FamilyId, IdAuth, IdBlock, IdMeasurements, ImageId, SevEcdsaPubKey, SevEcdsaSig,
-            CURVE_P384_NID,
-        },
-        snp::SnpLaunchDigest,
-    },
     parser::ByteParser,
+    snp::types::{
+        FamilyId, GuestPolicy, IdAuth, IdBlock, ImageId, SevEcdsaPubKey, SevEcdsaSig,
+        SnpLaunchDigest,
+    },
 };
+
+/// Calculated ID block material used during pre-attestation reference generation.
+#[derive(Default)]
+pub struct IdMeasurements {
+    /// ID block.
+    pub id_block: IdBlock,
+    /// ID authentication block.
+    pub id_auth: IdAuth,
+    /// ID key digest.
+    pub id_key_digest: SnpLaunchDigest,
+    /// Author key digest.
+    pub auth_key_digest: SnpLaunchDigest,
+}
 
 /// Generate an AUTH-BLOCK using 2 EC P-384 keys and an already calculated ID-BlOCK
 pub fn gen_id_auth_block(
@@ -88,7 +100,7 @@ pub fn load_priv_key(path: PathBuf) -> Result<EcKey<Private>, IdBlockError> {
     pkey.check_key().map_err(IdBlockError::CryptoErrorStack)?;
 
     if let Some(name) = pkey.group().curve_name() {
-        if name != CURVE_P384_NID {
+        if name != Nid::SECP384R1 {
             return Err(IdBlockError::SevCurveError());
         };
     };

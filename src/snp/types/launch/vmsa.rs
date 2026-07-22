@@ -1,18 +1,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
-//! Operations to build and interact with an SEV-ES VMSA
+//! SEV-ES / SNP VMSA page types and builder (Linux `sev_es_work_area` layout).
+
 use crate::{
     error::MeasurementError,
-    measurement::vcpu_types::CpuType,
+    snp::types::launch::vcpu::CpuType,
     parser::{ByteParser, Decoder, Encoder},
     util::parser_helper::{ReadExt, WriteExt},
 };
 use bitfield::bitfield;
-use std::{
-    fmt,
-    io::{Read, Write},
-    str::FromStr,
-};
+use std::{fmt, io::{Read, Write}, str::FromStr};
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -20,65 +17,7 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "serde")]
 use serde_big_array::BigArray;
 
-/// Different Possible SEV modes
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum SevMode {
-    /// SEV
-    Sev,
-    /// SEV-ES
-    SevEs,
-    /// SEV-SNP
-    SevSnp,
-}
-
-impl FromStr for SevMode {
-    type Err = MeasurementError;
-
-    fn from_str(s: &str) -> Result<Self, MeasurementError> {
-        match s.to_lowercase().as_str() {
-            "sev" => Ok(SevMode::Sev),
-            "sev-es" | "seves" => Ok(SevMode::SevEs),
-            "sev-snp" | "sevsnp" => Ok(SevMode::SevSnp),
-            _ => Err(MeasurementError::InvalidSevModeError(s.to_string())),
-        }
-    }
-}
-
-/// Supported Virtual Machine Monitors
-#[derive(Clone, Copy, PartialEq)]
-pub enum VMMType {
-    /// QEMU
-    QEMU = 1,
-    /// EC2
-    EC2 = 2,
-    /// KRUN
-    KRUN = 3,
-}
-
-impl FromStr for VMMType {
-    type Err = MeasurementError;
-
-    fn from_str(value: &str) -> Result<Self, MeasurementError> {
-        match value.to_lowercase().as_str() {
-            "qemu" => Ok(VMMType::QEMU),
-            "ec2" => Ok(VMMType::EC2),
-            "krun" => Ok(VMMType::KRUN),
-            _ => Err(MeasurementError::InvalidVcpuTypeError(value.to_string())),
-        }
-    }
-}
-
-impl fmt::Debug for VMMType {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            VMMType::QEMU => write!(f, "qemu"),
-            VMMType::EC2 => write!(f, "ec2"),
-            VMMType::KRUN => write!(f, "krun"),
-        }
-    }
-}
-
-/// Virtual Machine Control Block
+/// Virtual Machine Control Block segment descriptor.
 /// The layout of a VMCB struct is documented in Table B-1 of the
 /// AMD64 Architecture Programmer’s Manual, Volume 2: System Programming
 #[repr(C)]
@@ -763,23 +702,78 @@ impl ByteParser<()> for SevEsSaveArea {
     const EXPECTED_LEN: Option<usize> = Some(Self::SIZE);
 }
 impl SevEsSaveArea {
-    /// Size of the SEV-ES Save Area
+    /// Size of the SEV-ES save area page in bytes.
     pub const SIZE: usize = 4096;
+}
+
+/// Different possible SEV modes.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum SevMode {
+    /// SEV
+    Sev,
+    /// SEV-ES
+    SevEs,
+    /// SEV-SNP
+    SevSnp,
+}
+
+impl FromStr for SevMode {
+    type Err = MeasurementError;
+
+    fn from_str(s: &str) -> Result<Self, MeasurementError> {
+        match s.to_lowercase().as_str() {
+            "sev" => Ok(SevMode::Sev),
+            "sev-es" | "seves" => Ok(SevMode::SevEs),
+            "sev-snp" | "sevsnp" => Ok(SevMode::SevSnp),
+            _ => Err(MeasurementError::InvalidSevModeError(s.to_string())),
+        }
+    }
+}
+
+/// Supported virtual machine monitors.
+#[derive(Clone, Copy, PartialEq)]
+pub enum VMMType {
+    /// QEMU
+    QEMU = 1,
+    /// EC2
+    EC2 = 2,
+    /// KRUN
+    KRUN = 3,
+}
+
+impl FromStr for VMMType {
+    type Err = MeasurementError;
+
+    fn from_str(value: &str) -> Result<Self, MeasurementError> {
+        match value.to_lowercase().as_str() {
+            "qemu" => Ok(VMMType::QEMU),
+            "ec2" => Ok(VMMType::EC2),
+            "krun" => Ok(VMMType::KRUN),
+            _ => Err(MeasurementError::InvalidVcpuTypeError(value.to_string())),
+        }
+    }
+}
+
+impl fmt::Debug for VMMType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            VMMType::QEMU => write!(f, "qemu"),
+            VMMType::EC2 => write!(f, "ec2"),
+            VMMType::KRUN => write!(f, "krun"),
+        }
+    }
 }
 
 const BSP_EIP: u64 = 0xffff_fff0;
 
-/// VMSA Structure
+/// VMSA pages for BSP and optional AP vCPUs.
 pub struct VMSA {
-    /// Bootstrap Processor
     bsp_save_area: SevEsSaveArea,
-    /// Auxiliary Processor
     ap_save_area: Option<SevEsSaveArea>,
 }
 
 impl VMSA {
-    /// Generate a new SEV-ES VMSA
-    /// One Bootstrap and an auxiliary save area if needed
+    /// Build SEV-ES VMSA pages for the given vCPU configuration.
     pub fn new(
         ap_eip: u64,
         vcpu_type: CpuType,
@@ -808,7 +802,6 @@ impl VMSA {
         }
     }
 
-    /// Generate a save area
     fn build_save_area(
         eip: u64,
         guest_features: GuestFeatures,
@@ -881,7 +874,7 @@ impl VMSA {
         area
     }
 
-    /// Return a vector containing the save area pages
+    /// Serialize one page per vCPU.
     pub fn pages(&self, vcpus: usize) -> Result<Vec<Vec<u8>>, MeasurementError> {
         let bsp_page = self.bsp_save_area.to_bytes()?.to_vec();
         let ap_save_area_bytes: Option<Vec<u8>> = self
