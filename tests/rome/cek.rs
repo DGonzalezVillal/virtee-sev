@@ -20,7 +20,7 @@ fn encode() {
 #[cfg(feature = "openssl")]
 #[test]
 fn verify() {
-    use ::sev::certs::sev::builtin::rome::ASK;
+    use ::sev::attestation::endorser::sev::builtin::rome::ASK;
 
     let mut mut_cek = CEK;
     let mut mut_ask = ASK;

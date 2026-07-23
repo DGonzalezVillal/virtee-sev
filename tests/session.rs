@@ -5,7 +5,7 @@
 #[cfg(all(target_os = "linux", feature = "sev"))]
 mod initialized {
     use ::sev::{
-        certs::sev::builtin::naples::*, certs::sev::*, launch, parser::Decoder, session::Session,
+        attestation::endorser::sev::builtin::naples::*, attestation::endorser::sev::*, attestation::verifier::Verifiable, launch, launch::sev::session::Session, parser::Decoder,
     };
     use std::convert::*;
 

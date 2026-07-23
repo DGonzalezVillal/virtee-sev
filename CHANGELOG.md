@@ -33,6 +33,9 @@ All notable changes to this project will be documented in this file.
   under `attestation::reference`.
 - Moved guest launch types into `snp::types::launch` (OVMF metadata layouts,
   QEMU vCPU models, OVMF firmware parsing, and SEV-ES VMSA save-area pages).
+- Moved legacy SEV certificate chains into `attestation::endorser::sev` and
+  verification into `attestation::verifier::sev`. Moved
+  `LegacyAttestationReport` into `attestation::evidence::sev`.
 
 ### Changed
 
@@ -56,7 +59,11 @@ All notable changes to this project will be documented in this file.
   chain, report signature, and report appraisal) into
   `attestation::verifier`.
 - Removed `certs::snp`. SNP attestation now lives entirely under
-  `attestation`; `certs` is legacy SEV only (`feature = "sev"`).
+  `attestation`.
+- Removed the `certs` module. Legacy SEV endorsement material lives under
+  `attestation::endorser::sev`.
+- Moved the legacy SEV guest-owner launch session from the crate root into
+  `launch::sev::session`.
 - Removed the `firmware::guest::types` shim. Guest attestation device access
   moved to `attestation::attester::snp::Firmware`.
 - Moved SNP guest firmware ioctl definitions from `firmware::linux::guest`

@@ -59,16 +59,3 @@ impl Encoder<()> for Chain {
         self.cek.encode(&mut writer, ())
     }
 }
-
-#[cfg(feature = "openssl")]
-impl<'a> Verifiable for &'a Chain {
-    type Output = &'a Certificate;
-
-    fn verify(self) -> Result<Self::Output> {
-        (&self.oca, &self.oca).verify()?;
-        (&self.oca, &self.pek).verify()?;
-        (&self.cek, &self.pek).verify()?;
-        (&self.pek, &self.pdh).verify()?;
-        Ok(&self.pdh)
-    }
-}

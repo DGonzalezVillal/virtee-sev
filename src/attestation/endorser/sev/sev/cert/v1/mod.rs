@@ -62,7 +62,7 @@ impl Signer<Certificate> for PrivateKey<Usage> {
 
         sig.save(&target.body)?;
 
-        let sig = crate::certs::sev::Signature {
+        let sig = crate::attestation::endorser::sev::Signature {
             usage: self.usage.into(),
             hash: self.hash,
             kind: self.key.id(),

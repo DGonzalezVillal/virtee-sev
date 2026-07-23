@@ -45,6 +45,46 @@
 //! To use SEV-SNP with the defaults (or explicitly):  
 //! `sev = { version = "1.2.1", features = ["snp"] }`  
 //!
+//! ## Legacy SEV attestation
+//!
+//! For first-generation SEV remote attestation (`feature = "sev"`), use the same
+//! [`attestation`] module roles with legacy SEV types:
+//!
+//! | Module | Role |
+//! |---|---|
+//! | [`attestation::evidence::sev`] | `LegacyAttestationReport` |
+//! | [`attestation::verifier::sev`] | Certificate chain and report verification |
+//! | [`attestation::endorser::sev`] | PEK/PDH/CEK chains and built-in ARK/ASK |
+//! | [`attestation::reference::sev`] | Launch digest reference calculation |
+//!
+//! [`attestation::evidence::sev`]: crate::attestation::evidence::sev
+//! [`attestation::reference::sev`]: crate::attestation::reference::sev
+//!
+//! ## SNP attestation
+//!
+//! For SEV-SNP remote attestation, use the [`attestation`] module. It is
+//! organized around [IETF RATS](https://datatracker.ietf.org/doc/rfc9334/) roles:
+//!
+//! | Module | Role |
+//! |---|---|
+//! | [`attestation::evidence::snp`] | Evidence framing and parsing (`Report`, `ReportBody`, …) |
+//! | [`attestation::verifier`] | Signature and chain verification |
+//! | [`attestation::endorser`] | Endorsement material (VCEK/VLEK chains) |
+//! | [`attestation::attester`] | Guest evidence collection (`/dev/sev-guest`) |
+//! | [`attestation::reference`] | Reference values (launch digest, ID block) |
+//!
+//! Shared SNP firmware ABI wire types live in [`snp::types`], including guest
+//! launch layouts under [`snp::types::launch`].
+//!
+//! [`attestation`]: crate::attestation
+//! [`attestation::evidence::snp`]: crate::attestation::evidence::snp
+//! [`attestation::verifier`]: crate::attestation::verifier
+//! [`attestation::endorser`]: crate::attestation::endorser
+//! [`attestation::attester`]: crate::attestation::attester
+//! [`attestation::reference`]: crate::attestation::reference
+//! [`snp::types`]: crate::snp::types
+//! [`snp::types::launch`]: crate::snp::types::launch
+//!
 //! ## Platform Management
 //!
 //! Refer to the [firmware](crate::firmware) module for more information.
@@ -55,13 +95,22 @@
 //!
 //! ## Cryptographic Verification
 //!
-//! To enable the cryptographic verification of certificate chains and
-//! attestation reports, either the `openssl` or `crypto_nossl` feature
-//! has to be enabled manually. With `openssl`, OpenSSL is used for the
-//! verification. With `crypto_nossl`, OpenSSL is _not_ used for the
-//! verification and instead pure-Rust libraries (e.g., `p384`, `rsa`,
-//! etc.) are used. `openssl` and `crypto_nossl` are mutually exclusive,
-//! and enabling both at the same time leads to a compiler error.
+//! Neither `openssl` nor `crypto_nossl` is enabled by default. Enable one of
+//! them explicitly for certificate chain and attestation report verification;
+//! [`attestation::verifier`] and [`attestation::endorser`] are gated on either
+//! feature.
+//!
+//! With `openssl`, verification uses OpenSSL. The crate defaults include
+//! `openssl?/vendored`, so when the `openssl` feature is enabled, the vendored
+//! OpenSSL build is used automatically.
+//!
+//! With `crypto_nossl`, pure-Rust crates (`p384`, `rsa`, etc.) handle
+//! verification instead. `openssl` and `crypto_nossl` are mutually exclusive.
+//!
+//! Examples:
+//!
+//! `sev = { version = "1.2.1", features = ["snp", "openssl"] }`  
+//! `sev = { version = "1.2.1", features = ["snp", "crypto_nossl"] }`
 //!
 //! ## Remarks
 //!
@@ -95,9 +144,6 @@ compile_error!(
     "feature \"openssl\" and feature \"crypto_nossl\" cannot be enabled at the same time"
 );
 
-/// SEV and SEV-SNP certificates interface.
-pub mod certs;
-
 #[cfg(any(feature = "sev", feature = "snp"))]
 pub mod attestation;
 
@@ -106,8 +152,6 @@ pub mod snp;
 
 pub mod firmware;
 pub mod launch;
-#[cfg(all(target_os = "linux", feature = "openssl", feature = "sev"))]
-pub mod session;
 mod util;
 
 /// Error module.
@@ -122,10 +166,10 @@ use crate::parser::Decoder;
 pub use util::cached_chain;
 
 #[cfg(all(feature = "openssl", feature = "sev"))]
-use certs::sev::sev;
+use attestation::endorser::sev::sev;
 
 #[cfg(feature = "sev")]
-use certs::sev::ca::{Certificate, Chain as CertSevCaChain};
+use attestation::endorser::sev::ca::{Certificate, Chain as CertSevCaChain};
 
 #[cfg(all(
     not(feature = "sev"),
@@ -135,7 +179,7 @@ use certs::sev::ca::{Certificate, Chain as CertSevCaChain};
 use attestation::endorser::snp::ca::Chain as CertSnpCaChain;
 
 #[cfg(feature = "sev")]
-use certs::sev::builtin as SevBuiltin;
+use attestation::endorser::sev::builtin as SevBuiltin;
 
 #[cfg(all(
     not(feature = "sev"),
@@ -168,7 +212,7 @@ use std::io::{Read, Write};
 /// // `openssl` feature enabled.
 ///
 /// use std::convert::TryFrom;
-/// use sev::certs::sev::Usage;
+/// use sev::attestation::endorser::sev::Usage;
 /// use sev::firmware::host::types::Firmware;
 /// use sev::Generation;
 ///
@@ -369,7 +413,7 @@ impl TryFrom<&sev::Chain> for Generation {
     type Error = ();
 
     fn try_from(schain: &sev::Chain) -> Result<Self, Self::Error> {
-        use crate::certs::sev::Verifiable;
+        use crate::attestation::verifier::Verifiable;
 
         let naples: CertSevCaChain = Generation::Naples.into();
         let rome: CertSevCaChain = Generation::Rome.into();

@@ -45,6 +45,31 @@ For example, to include first-generation SEV support:
 To use SEV-SNP with the defaults (or explicitly):  
 `sev = { version = "1.2.1", features = ["snp"] }`  
 
+## SNP attestation
+
+For SEV-SNP remote attestation, use the [`attestation`](https://docs.rs/sev/latest/sev/attestation/) module. It is organized around [IETF RATS](https://datatracker.ietf.org/doc/rfc9334/) roles:
+
+| Module | Role |
+|---|---|
+| `attestation::evidence::snp` | Evidence framing and parsing (`Report`, `ReportBody`, …) |
+| `attestation::verifier` | Signature and chain verification |
+| `attestation::endorser` | Endorsement material (VCEK/VLEK chains) |
+| `attestation::attester` | Guest evidence collection (`/dev/sev-guest`) |
+| `attestation::reference` | Reference values (launch digest, ID block) |
+
+Shared SNP firmware ABI wire types live in [`snp::types`](https://docs.rs/sev/latest/sev/snp/types/), including guest launch layouts under `snp::types::launch`.
+
+## Legacy SEV attestation
+
+For first-generation SEV (`feature = "sev"`), the same [`attestation`](https://docs.rs/sev/latest/sev/attestation/) module provides legacy roles:
+
+| Module | Role |
+|---|---|
+| `attestation::evidence::sev` | `LegacyAttestationReport` |
+| `attestation::verifier::sev` | Certificate chain and report verification |
+| `attestation::endorser::sev` | PEK/PDH/CEK chains and built-in ARK/ASK |
+| `attestation::reference::sev` | Launch digest reference calculation |
+
 ## Platform Management
 
 Refer to the [firmware](https://docs.rs/sev/latest/sev/firmware/) module for more information.
@@ -55,13 +80,21 @@ Refer to the [launch](https://docs.rs/sev/latest/sev/launch/) module for more in
 
 ## Cryptographic Verification
 
-To enable the cryptographic verification of certificate chains and
-attestation reports, either the `openssl` or `crypto_nossl` feature
-has to be enabled manually. With `openssl`, OpenSSL is used for the
-verification. With `crypto_nossl`, OpenSSL is _not_ used for the
-verification and instead pure-Rust libraries (e.g., `p384`, `rsa`,
-etc.) are used. `openssl` and `crypto_nossl` are mutually exclusive,
-and enabling both at the same time leads to a compiler error.
+Neither `openssl` nor `crypto_nossl` is enabled by default. Enable one of them
+explicitly for certificate chain and attestation report verification;
+`attestation::verifier` and `attestation::endorser` are gated on either feature.
+
+With `openssl`, verification uses OpenSSL. The crate defaults include
+`openssl?/vendored`, so when the `openssl` feature is enabled, the vendored
+OpenSSL build is used automatically.
+
+With `crypto_nossl`, pure-Rust crates (`p384`, `rsa`, etc.) handle verification
+instead. `openssl` and `crypto_nossl` are mutually exclusive.
+
+Examples:
+
+`sev = { version = "1.2.1", features = ["snp", "openssl"] }`  
+`sev = { version = "1.2.1", features = ["snp", "crypto_nossl"] }`
 
 ## Remarks
 

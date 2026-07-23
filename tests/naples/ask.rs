@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::*;
-use ::sev::certs::sev::builtin::naples::*;
+use ::sev::attestation::endorser::sev::builtin::naples::*;
 
 #[test]
 fn decode() {

@@ -50,7 +50,7 @@ impl std::fmt::Display for Certificate {
 
         self.encode(&mut hsh, Body).or(Err(Error))?;
 
-        write!(f, "{} {} ", crate::certs::sev::Usage::from(key.usage), key)?;
+        write!(f, "{} {} ", crate::attestation::endorser::sev::Usage::from(key.usage), key)?;
         for b in hsh.finish()?.iter() {
             write!(f, "{:02x}", *b)?;
         }
@@ -72,7 +72,7 @@ impl PartialEq for Certificate {
     }
 }
 
-impl<U: Copy + Into<crate::certs::sev::Usage>> PartialEq<U> for Certificate {
+impl<U: Copy + Into<crate::attestation::endorser::sev::Usage>> PartialEq<U> for Certificate {
     fn eq(&self, other: &U) -> bool {
         if let Ok(a) = Usage::try_from(self) {
             return a == (*other).into();
@@ -148,7 +148,7 @@ impl TryFrom<&Certificate> for Usage {
     }
 }
 
-impl TryFrom<&Certificate> for crate::certs::sev::Usage {
+impl TryFrom<&Certificate> for crate::attestation::endorser::sev::Usage {
     type Error = Error;
 
     fn try_from(value: &Certificate) -> Result<Self> {
@@ -178,17 +178,6 @@ impl TryFrom<&Certificate> for Signature {
             1 => unsafe { Ok(value.v1.try_into()?) },
             _ => Err(ErrorKind::InvalidInput.into()),
         }
-    }
-}
-
-#[cfg(feature = "openssl")]
-impl Verifiable for (&Certificate, &Certificate) {
-    type Output = ();
-
-    fn verify(self) -> Result<()> {
-        let key: PublicKey<Usage> = self.0.try_into()?;
-        let sig: Signature = self.1.try_into()?;
-        key.verify(self.1, &sig)
     }
 }
 

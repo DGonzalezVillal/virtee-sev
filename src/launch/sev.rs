@@ -11,6 +11,9 @@ use crate::{
     util::{TypeLoad, TypeSave},
 };
 
+#[cfg(feature = "openssl")]
+pub mod session;
+
 #[cfg(target_os = "linux")]
 use crate::launch::linux::ioctl::*;
 #[cfg(target_os = "linux")]
@@ -377,7 +380,7 @@ pub struct Start {
     pub policy: Policy,
 
     /// The tenant's Diffie-Hellman certificate.
-    pub cert: certs::sev::sev::Certificate,
+    pub cert: crate::attestation::endorser::sev::sev::Certificate,
 
     /// A secure channel with the AMD SP.
     pub session: Session,

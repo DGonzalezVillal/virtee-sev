@@ -12,7 +12,8 @@ mod sev {
 
     #[test]
     fn test_for_verify_false_positive() {
-        use ::sev::certs::sev::*;
+        use ::sev::attestation::endorser::sev::*;
+        use ::sev::attestation::verifier::Verifiable;
         use ::sev::parser::Decoder;
 
         // https://github.com/enarx/enarx/issues/520

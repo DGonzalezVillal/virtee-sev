@@ -36,17 +36,6 @@ use openssl::*;
 pub(crate) struct Body;
 
 #[cfg(feature = "openssl")]
-/// An interface for types that may contain entities such as
-/// signatures that must be verified.
-pub trait Verifiable {
-    /// An output type for successful verification.
-    type Output;
-
-    /// Self-verifies signatures.
-    fn verify(self) -> Result<Self::Output>;
-}
-
-#[cfg(feature = "openssl")]
 /// An interface for types that can sign another type (i.e., a certificate).
 pub trait Signer<T> {
     /// The now-signed type.

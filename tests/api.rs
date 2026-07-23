@@ -7,7 +7,7 @@ mod sev {
     #[cfg(feature = "dangerous_hw_tests")]
     use sev::cached_chain;
     use sev::{
-        certs::sev::sev::Usage,
+        attestation::endorser::sev::sev::Usage,
         firmware::host::{Build, Firmware, Version},
     };
 
@@ -70,7 +70,7 @@ mod sev {
     #[cfg_attr(not(host), ignore)]
     #[test]
     fn pdh_cert_export() {
-        use sev::certs::sev::Verifiable;
+        use sev::attestation::verifier::Verifiable;
 
         let mut fw = Firmware::open().unwrap();
         let chain = fw.pdh_cert_export().unwrap();
@@ -88,7 +88,8 @@ mod sev {
     #[test]
     #[serial]
     fn pek_cert_import() {
-        use sev::certs::sev::{sev::Certificate, Signer, Verifiable};
+        use sev::attestation::endorser::sev::{sev::Certificate, Signer};
+        use sev::attestation::verifier::Verifiable;
 
         let mut fw = Firmware::open().unwrap();
 

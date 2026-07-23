@@ -20,7 +20,7 @@ fn encode() {
 #[cfg(feature = "openssl")]
 #[test]
 fn verify() {
-    use ::sev::certs::sev::builtin::naples::ASK;
+    use ::sev::attestation::endorser::sev::builtin::naples::ASK;
 
     let mut mut_cek = CEK;
     let mut mut_ask = ASK;

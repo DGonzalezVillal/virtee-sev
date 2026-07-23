@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #[cfg(target_os = "linux")]
-use crate::certs::sev::sev;
+use crate::attestation::endorser::sev::sev;
 
 use crate::firmware::host::Version;
 

@@ -41,14 +41,3 @@ impl Encoder<()> for Chain {
         self.ark.encode(&mut writer, ())
     }
 }
-
-#[cfg(feature = "openssl")]
-impl<'a> Verifiable for &'a Chain {
-    type Output = &'a Certificate;
-
-    fn verify(self) -> Result<Self::Output> {
-        (&self.ark, &self.ark).verify()?;
-        (&self.ark, &self.ask).verify()?;
-        Ok(&self.ask)
-    }
-}
