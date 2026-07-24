@@ -3,9 +3,9 @@
 use crate::{
     attestation::evidence::snp::SignatureAlgorithm,
     parser::Decoder,
-    snp::types::{GuestPolicy, TcbVersion, Version},
+    types::primitives::Generation,
+    types::snp::{GuestPolicy, TcbVersion, Version},
     util::{hexline::HexLine, parser_helper::validate_reserved},
-    Generation,
 };
 
 use std::convert::TryFrom;

@@ -11,7 +11,7 @@ use std::{convert::TryFrom, fs::File, io::Read, path::PathBuf};
 use crate::{
     error::IdBlockError,
     parser::ByteParser,
-    snp::types::{
+    types::snp::{
         FamilyId, GuestPolicy, IdAuth, IdBlock, ImageId, SevEcdsaPubKey, SevEcdsaSig,
         SnpLaunchDigest,
     },

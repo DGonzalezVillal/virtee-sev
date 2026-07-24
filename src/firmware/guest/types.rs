@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{error::*, snp::types::DerivedKey};
+use crate::{error::*, types::snp::DerivedKey};
 
 use static_assertions::const_assert;
 
@@ -267,7 +267,7 @@ mod test {
         }
     }
 
-    use crate::snp::types::GuestFieldSelect;
+    use crate::types::snp::GuestFieldSelect;
 
     use super::*;
 

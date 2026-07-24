@@ -3,14 +3,14 @@
 //! SNP guest attester: request attestation reports from `/dev/sev-guest`.
 
 use crate::error::*;
-use crate::snp::types::DerivedKey;
+use crate::types::snp::DerivedKey;
 
 #[cfg(target_os = "linux")]
 use crate::firmware::{
     guest::{ioctl::*, types::*},
-    host::CertTableEntry,
-    linux::host as HostFFI,
+    host as HostFFI,
 };
+use crate::types::snp::platform::CertTableEntry;
 
 #[cfg(target_os = "linux")]
 use std::fs::{File, OpenOptions};

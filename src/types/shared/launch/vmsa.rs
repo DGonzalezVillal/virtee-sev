@@ -4,7 +4,7 @@
 
 use crate::{
     error::MeasurementError,
-    snp::types::launch::vcpu::CpuType,
+    types::shared::launch::vcpu::CpuType,
     parser::{ByteParser, Decoder, Encoder},
     util::parser_helper::{ReadExt, WriteExt},
 };

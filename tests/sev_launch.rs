@@ -12,7 +12,7 @@ use kvm_ioctls::{Kvm, VcpuExit};
 use serial_test::serial;
 use sev::attestation::endorser::sev::sev::Usage;
 use sev::attestation::endorser::sev::{sev::Certificate, Signer};
-use sev::{cached_chain, firmware::host::Firmware, launch::sev::*, launch::sev::session::Session};
+use sev::{cached_chain, platform::Firmware, launch::sev::*, launch::sev::session::Session};
 use std::slice::from_raw_parts;
 use std::{convert::TryFrom, os::unix::io::AsRawFd};
 

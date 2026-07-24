@@ -1,282 +1,247 @@
 // SPDX-License-Identifier: Apache-2.0
 
-pub(crate) use crate::firmware::linux::host as FFI;
-/// A representation of the type of data provided to [parse_table](crate::firmware::host::parse_table)
-pub use crate::firmware::linux::host::types::RawData;
+use std::ops::{Deref, DerefMut};
 
 #[cfg(target_os = "linux")]
 use crate::error::CertError;
-use crate::{
-    parser::{ByteParser, Decoder, Encoder},
-    util::{
-        hexline::HexLine,
-        parser_helper::{ReadExt, WriteExt},
-    },
-    Generation,
-};
-use std::{
-    convert::{TryFrom, TryInto},
-    fmt::Display,
-    io::{Read, Write},
-    ops::BitOrAssign,
-};
 
-use bitfield::bitfield;
+use crate::{error::HashstickError, types::snp::platform as UAPI};
 
-use self::FFI::types::SnpSetConfig;
+#[cfg(target_os = "linux")]
+use uuid::Uuid;
 
-pub use crate::snp::types::{CertType, MaskId, TcbVersion};
+/// Raw certificate bytes (by pointer or Vec<u8>).
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum RawData {
+    /// A mutable pointer to an unsigned byte.
+    Pointer(*mut u8),
 
-#[cfg(feature = "serde")]
-use serde::{Deserialize, Serialize};
-
-bitfield! {
-    /// The platform's status flags.
-    #[derive(Default)]
-    pub struct SnpPlatformStatusFlags(u32);
-    impl Debug;
-
-    /// If set, this platform is owned. Otherwise, it is self-owned.
-    pub is_owned, _: 0;
-
-    /// If set, encrypted state functionality is present.
-    pub is_encrypted_state_present, _: 8;
+    /// A vector of bytes.
+    Vector(Vec<u8>),
 }
 
-impl BitOrAssign for SnpPlatformStatusFlags {
-    fn bitor_assign(&mut self, rhs: Self) {
-        self.0 |= rhs.0;
+impl From<*mut u8> for RawData {
+    fn from(value: *mut u8) -> Self {
+        Self::Pointer(value)
     }
 }
 
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive(Clone, Debug, PartialEq, Eq)]
+impl<const SIZE: usize> From<[u8; SIZE]> for RawData {
+    fn from(value: [u8; SIZE]) -> Self {
+        Self::Vector(value.into())
+    }
+}
+
+impl From<&mut [u8]> for RawData {
+    fn from(value: &mut [u8]) -> Self {
+        Self::Vector(value.into())
+    }
+}
+
+impl From<Vec<u8>> for RawData {
+    fn from(value: Vec<u8>) -> Self {
+        Self::Vector(value)
+    }
+}
+
+impl From<&Vec<u8>> for RawData {
+    fn from(value: &Vec<u8>) -> Self {
+        Self::Vector(value.to_vec())
+    }
+}
+
+impl From<&mut Vec<u8>> for RawData {
+    fn from(value: &mut Vec<u8>) -> Self {
+        Self::Vector(value.to_vec())
+    }
+}
+
+/// Structure used for interacting with the Linux Kernel.
+///
+/// The original C structure looks like this:
+///
+/// ```C
+/// struct cert_table {
+///    struct {
+///       unsigned char guid[16];
+///       uint32 offset;
+///       uint32 length;
+///    } cert_table_entry[];
+/// };
+/// ```
+///
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
 #[repr(C)]
-/// An entry with information regarding a specific certificate.
 pub struct CertTableEntry {
-    /// A Specificy certificate type.
-    pub cert_type: CertType,
+    /// Sixteen character GUID.
+    guid: [u8; 16],
 
-    /// The raw data of the certificate.
-    pub data: Vec<u8>,
-}
+    /// The starting location of the certificate blob.
+    offset: u32,
 
-impl Encoder<()> for CertTableEntry {
-    fn encode(&self, writer: &mut impl Write, _: ()) -> Result<(), std::io::Error> {
-        writer.write_bytes(self.cert_type.clone(), ())?;
-        writer.write_bytes(self.data.clone(), ())?;
-        Ok(())
-    }
-}
-
-impl Decoder<()> for CertTableEntry {
-    fn decode(reader: &mut impl Read, _: ()) -> Result<Self, std::io::Error> {
-        let cert_type = reader.read_bytes()?;
-        let data = reader.read_bytes()?;
-        Ok(Self { cert_type, data })
-    }
-}
-
-impl ByteParser<()> for CertTableEntry {
-    type Bytes = Vec<u8>;
-
-    fn from_bytes(bytes: &[u8]) -> std::io::Result<Self> {
-        let mut rdr: &[u8] = bytes;
-        Self::decode(&mut rdr, ())
-    }
-
-    fn to_bytes(&self) -> std::io::Result<Self::Bytes> {
-        let mut out = Vec::new();
-        self.encode(&mut out, ())?;
-        Ok(out)
-    }
+    /// The number of bytes to read from the offset.
+    length: u32,
 }
 
 impl CertTableEntry {
-    /// Façade for retreiving the GUID for the Entry.
-    pub fn guid_string(&self) -> String {
-        self.cert_type.to_string()
-    }
-
-    /// Get an immutable reference to the data stored in the entry.
-    pub fn data(&self) -> &[u8] {
-        self.data.as_slice()
-    }
-
-    /// Generates a certificate from the str GUID and data provided.
-    pub fn from_guid(guid: &uuid::Uuid, data: Vec<u8>) -> Result<Self, uuid::Error> {
-        Ok(Self {
-            cert_type: guid.try_into()?,
-            data,
-        })
-    }
-
-    /// Generates a certificate from the CertType and data provided.
-    pub fn new(cert_type: CertType, data: Vec<u8>) -> Self {
-        Self { cert_type, data }
-    }
-
     /// Builds a Kernel formatted CertTable for sending the certificate content to the PSP.
+    ///
+    /// Users should pass the rust-friendly vector of [UAPI::CertTableEntry](crate::types::snp::platform::CertTableEntry), and this function
+    /// will handle adding the last entry and the structuring of the buffer sent to the hypervisor.
+    ///
+    /// The contiguous memory layout should look similar to this:
+    ///
+    /// ```text
+    ///             |-> |------------------|    |-  CertTableEntry -|
+    ///             |   | CertTableEntry_1 <<<--| - guid            |
+    ///             |   | CertTableEntry_2 |    | - offset          |
+    /// CertTable --|   | ...              |    | - length          |
+    ///             |   | ...              |    |-------------------|
+    ///             |   | ...              |
+    ///             |-> | CertTableEntry_z | <-- last entry all zeroes
+    /// offset (1)  --> | RawCertificate_1 |
+    ///                 | ...              |
+    ///                 | ...              |
+    /// offset (2)  --> | RawCertificate_2 |
+    ///                 | ...              |
+    ///                 | ...              |
+    /// offset (n)  --> | RawCertificate_n |
+    ///                 |------------------|
+    ///
+    /// ```
+    ///
     #[cfg(target_os = "linux")]
-    pub fn cert_table_to_vec_bytes(table: &[Self]) -> Result<Vec<u8>, CertError> {
-        FFI::types::CertTableEntry::uapi_to_vec_bytes(table)
+    pub fn uapi_to_vec_bytes(table: &[UAPI::CertTableEntry]) -> Result<Vec<u8>, CertError> {
+        // Create the vector to return for later.
+        let mut bytes: Vec<u8> = vec![];
+
+        // Find the location where the first certificate should begin.
+        let mut offset: u32 = (std::mem::size_of::<CertTableEntry>() * (table.len() + 1)) as u32;
+
+        // Create the buffer to store the table and certificates.
+        let mut raw_certificates: Vec<u8> = vec![];
+
+        for entry in table.iter() {
+            let guid: Uuid = match Uuid::parse_str(&entry.guid_string()) {
+                Ok(uuid) => uuid,
+                Err(_) => return Err(CertError::InvalidGUID),
+            };
+
+            // Append the guid to the byte array.
+            bytes.extend_from_slice(guid.as_bytes());
+
+            // Append the offset location to the byte array.
+            bytes.extend_from_slice(&offset.to_ne_bytes());
+
+            // Append the length to the byte array.
+            bytes.extend_from_slice(&(entry.data.len() as u32).to_ne_bytes());
+
+            // Copy the certificate data out until concatenating it later.
+            raw_certificates.extend_from_slice(entry.data.as_slice());
+
+            // Increment the offset
+            offset += entry.data.len() as u32;
+        }
+
+        // Append the the empty entry to signify the end of the table.
+        bytes.append(&mut vec![0u8; 24]);
+
+        // Append the certificate bytes to the end of the table.
+        bytes.append(&mut raw_certificates);
+
+        Ok(bytes)
     }
 
-    /// Takes in bytes in kernel CertTable format and returns in user API CertTable format.
+    /// Parses the raw array of bytes into more human understandable information.
+    ///
+    /// The original C structure looks like this:
+    ///
+    /// ```C
+    /// struct cert_table {
+    ///    struct {
+    ///       unsigned char guid[16];
+    ///       uint32 offset;
+    ///       uint32 length;
+    ///    } cert_table_entry[];
+    /// };
+    /// ```
+    ///
     #[cfg(target_os = "linux")]
-    pub fn vec_bytes_to_cert_table(bytes: &mut [u8]) -> Result<Vec<Self>, CertError> {
-        let cert_bytes_ptr: *mut FFI::types::CertTableEntry =
-            bytes.as_mut_ptr() as *mut FFI::types::CertTableEntry;
+    pub unsafe fn parse_table(
+        mut data: *mut CertTableEntry,
+    ) -> Result<Vec<UAPI::CertTableEntry>, uuid::Error> {
+        // Helpful Constance for parsing the data
+        const ZERO_GUID: Uuid = Uuid::from_bytes([0x0; 16]);
 
-        Ok(unsafe { FFI::types::CertTableEntry::parse_table(cert_bytes_ptr).unwrap() })
+        // Pre-defined re-usable variables.
+        let table_ptr: *mut u8 = data as *mut u8;
+
+        // Create a location to store the final data.
+        let mut retval: Vec<UAPI::CertTableEntry> = vec![];
+
+        // Start parsing the PSP data from the pointers.
+        let mut entry: CertTableEntry;
+
+        loop {
+            // Dereference the pointer to parse the table data.
+            entry = *data;
+            let guid: Uuid = Uuid::from_slice(entry.guid.as_slice())?;
+
+            // Once we find a zeroed GUID, we are done.
+            if guid == ZERO_GUID {
+                break;
+            }
+
+            // Calculate the beginning and ending pointers of the raw certificate data.
+            let mut cert_bytes: Vec<u8> = vec![];
+            let mut cert_addr: *mut u8 = table_ptr.offset(entry.offset as isize);
+            let cert_end: *mut u8 = cert_addr.add(entry.length as usize);
+
+            // Gather the certificate bytes.
+            while cert_addr != cert_end {
+                cert_bytes.push(*cert_addr);
+                cert_addr = cert_addr.add(1usize);
+            }
+
+            // Build the Rust-friendly structure and append vector to be returned when
+            // we are finished.
+            retval.push(UAPI::CertTableEntry::from_guid(&guid, cert_bytes.clone())?);
+
+            // Move the pointer ahead to the next value.
+            data = data.offset(1isize);
+        }
+
+        Ok(retval)
     }
 }
 
-impl Ord for CertTableEntry {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.cert_type.cmp(&other.cert_type)
-    }
-}
-
-impl PartialOrd for CertTableEntry {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-bitfield! {
-    /// Various platform initialization configuration data. Byte 0x3 in SEV-SNP's
-    /// STRUCT_PLATFORM_STATUS.
-    #[derive(Default, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
-    pub struct PlatformInit(u8);
-    impl Debug;
-
-    /// Indicates if RMP is initialized.
-    pub is_rmp_init, _: 0;
-
-    /// Indicates that alias detection has completed since the last system reset
-    /// and there are no aliasing addresses. Resets to 0.
-    /// Added in firmware version:
-    ///     Milan family: 1.55.22
-    ///     Genoa family: 1.55.38
-    pub alias_check_complete, _: 1;
-
-    /// Indicates TIO is enabled. Present if SevTio feature bit is set.
-    pub is_tio_en, _: 3;
-}
-
-impl Encoder<()> for PlatformInit {
-    fn encode(&self, writer: &mut impl Write, _: ()) -> Result<(), std::io::Error> {
-        writer.write_bytes(self.0, ())?;
-        Ok(())
-    }
-}
-
-impl Decoder<()> for PlatformInit {
-    fn decode(reader: &mut impl Read, _: ()) -> Result<Self, std::io::Error> {
-        let init = reader.read_bytes()?;
-        Ok(Self(init))
-    }
-}
-
-impl ByteParser<()> for PlatformInit {
-    type Bytes = [u8; 1];
-    const EXPECTED_LEN: Option<usize> = Some(1);
-}
-
-impl BitOrAssign for PlatformInit {
-    fn bitor_assign(&mut self, rhs: Self) {
-        self.0 |= rhs.0;
-    }
-}
-
-/// Query the SEV-SNP platform status.
-///
-/// (Chapter 8.3; Table 38)
-#[derive(Default, Debug, PartialEq, Eq, PartialOrd, Ord)]
-#[repr(C)]
-pub struct SnpPlatformStatus {
-    /// The firmware API version (major.minor)
-    pub version: (u8, u8),
-
-    /// The platform state.
-    pub state: u8,
-
-    /// IsRmpInitiailzied
-    pub is_rmp_init: PlatformInit,
-
-    /// The platform build ID.
-    pub build_id: u32,
-
-    /// PlatforPolicy of the machine
-    pub platform_policy: PlatformPolicy,
-
-    /// The number of valid guests maintained by the SEV-SNP firmware.
-    pub guest_count: u32,
-
-    /// Installed TCB version.
-    pub platform_tcb_version: TcbVersion,
-
-    /// Reported TCB version.
-    pub reported_tcb_version: TcbVersion,
-}
-
-impl Encoder<Generation> for SnpPlatformStatus {
-    fn encode(
-        &self,
-        writer: &mut impl Write,
-        generation: Generation,
-    ) -> Result<(), std::io::Error> {
-        writer.write_bytes(self.version.0, ())?;
-        writer.write_bytes(self.version.1, ())?;
-        writer.write_bytes(self.is_rmp_init, ())?;
-        writer.write_bytes(self.build_id, ())?;
-        writer.write_bytes(self.platform_policy, ())?;
-        writer.write_bytes(self.guest_count, ())?;
-        writer.write_bytes(self.platform_tcb_version, generation)?;
-        writer.write_bytes(self.reported_tcb_version, generation)?;
-        Ok(())
-    }
-}
-
-impl Decoder<Generation> for SnpPlatformStatus {
-    fn decode(reader: &mut impl Read, generation: Generation) -> Result<Self, std::io::Error> {
-        let major = reader.read_bytes()?;
-        let minor = reader.read_bytes()?;
-        Ok(Self {
-            version: (major, minor),
-            state: reader.read_bytes()?,
-            is_rmp_init: reader.read_bytes()?,
-            build_id: reader.read_bytes()?,
-            platform_policy: reader.read_bytes()?,
-            guest_count: reader.read_bytes()?,
-            platform_tcb_version: reader.read_bytes_with(generation)?,
-            reported_tcb_version: reader.read_bytes_with(generation)?,
-        })
-    }
-}
-
-impl ByteParser<Generation> for SnpPlatformStatus {
-    type Bytes = [u8; 32];
-    const EXPECTED_LEN: Option<usize> = Some(32);
+/// SNP_COMMIT structure  
+/// - length: length of the command buffer read by the PSP  
+#[cfg(feature = "snp")]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Default)]
+#[repr(C, packed)]
+pub struct SnpCommit {
+    pub buffer: u32,
 }
 
 /// Sets the system wide configuration values for SNP.
+#[cfg(feature = "snp")]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[repr(C, packed)]
-pub struct Config {
-    /// The TCB_VERSION to report in guest attestation reports.
-    pub reported_tcb: TcbVersion,
+pub struct SnpSetConfig {
+    /// The bytes corresponding to the TCB_VERSION to report in guest attestation reports.
+    pub reported_tcb: [u8; 8],
 
-    /// Indicates that the CHIP_ID field in the attestation report will always
-    /// be zero.
-    pub mask_id: MaskId,
+    /// mask_id [0] : whether chip id is present in attestation reports or not  
+    /// mask_id [1]: whether attestation reports are signed or not
+    /// rsvd [2:31]: reserved
+    pub mask_id: UAPI::MaskId,
 
     /// Reserved. Must be zero.
     reserved: [u8; 52],
 }
 
-impl Default for Config {
+impl Default for SnpSetConfig {
     fn default() -> Self {
         Self {
             reported_tcb: Default::default(),
@@ -286,961 +251,370 @@ impl Default for Config {
     }
 }
 
-impl Config {
-    /// Used to create a new Config
-    pub fn new(reported_tcb: TcbVersion, mask_id: MaskId) -> Self {
-        Self {
-            reported_tcb,
-            mask_id,
-            reserved: [0; 52],
-        }
-    }
-}
+// Expected length for the VLEK hashstick.
+const HASHSTICK_BUFFER_LEN: usize = 432;
 
-/// TryFrom to FFI Config when manually passing in the CPU generation
-impl TryFrom<(Config, Generation)> for FFI::types::SnpSetConfig {
-    type Error = std::io::Error;
-
-    fn try_from(args: (Config, Generation)) -> Result<Self, Self::Error> {
-        let mut snp_config: SnpSetConfig = Default::default();
-        let (value, generation) = args;
-        let tcb = value.reported_tcb.to_bytes_with(generation)?;
-        snp_config.reported_tcb = tcb;
-        snp_config.mask_id = value.mask_id;
-
-        Ok(snp_config)
-    }
-}
-
-/// TryFrom to FFI Config type when CPU Generation is unknown
-impl TryFrom<Config> for FFI::types::SnpSetConfig {
-    type Error = std::io::Error;
-
-    fn try_from(value: Config) -> Result<Self, Self::Error> {
-        let mut snp_config: SnpSetConfig = Default::default();
-        let generation = Generation::identify_host_generation()?;
-
-        let tcb = value.reported_tcb.to_bytes_with(generation)?;
-        snp_config.reported_tcb = tcb;
-        snp_config.mask_id = value.mask_id;
-
-        Ok(snp_config)
-    }
-}
-
-/// TryFrom from FFI Config type when CPU Generation is manually passed in
-impl TryFrom<(FFI::types::SnpSetConfig, Generation)> for Config {
-    type Error = std::io::Error;
-
-    fn try_from(value: (FFI::types::SnpSetConfig, Generation)) -> Result<Self, Self::Error> {
-        let reported_tcb = TcbVersion::from_bytes_with(&value.0.reported_tcb, value.1)?;
-        Ok(Self {
-            reported_tcb,
-            mask_id: value.0.mask_id,
-            ..Default::default()
-        })
-    }
-}
-
-/// TryFrom from FFI Config type when CPU Generation is unknown
-impl TryFrom<FFI::types::SnpSetConfig> for Config {
-    type Error = std::io::Error;
-
-    fn try_from(value: FFI::types::SnpSetConfig) -> Result<Self, Self::Error> {
-        let generation = Generation::identify_host_generation()?;
-        let reported_tcb = TcbVersion::from_bytes_with(&value.reported_tcb, generation)?;
-        Ok(Self {
-            reported_tcb,
-            mask_id: value.mask_id,
-            ..Default::default()
-        })
-    }
-}
-
-bitfield! {
-    /// Policy settings that appear in SNP PLATFORM STATUS
-    ///
-    /// | Bit(s) | Name | Description |
-    /// |--------|------|-------------|
-    /// |0|MASK_CHIP_ID|Set to the value of MaskChipID.|
-    /// |1|MASK_CHIP_KEY|Set to the value of MaskChipKey.|
-    /// |2|VLEK_EN|Indicates whether a VLEK hashtick is loaded|
-    /// |3|FEATURE_INFO|Indicates that the SNP_FEATURE_INFO command is available.|
-    /// |4|RAPL_DIS|Indicates that the RAPL is disabled.|
-    /// |5|CIPHERTEXT_HIDING_DRAM_CAP|Indicates platform capable of ciphertext hiding for the DRAM.|
-    /// |6|CIPHERTEXT_HIDING_DRAM_EN|Indicates ciphertext hiding is enabled for the DRAM.|
-    /// |31:7|-|Reserved.|
-    #[repr(C)]
-    #[derive(Default, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
-    pub struct PlatformPolicy(u32);
-    impl Debug;
-    /// Indicates that the CHIP_ID field in the attestation report will alwaysbe zero.
-    pub mask_chip_id, _: 0;
-    /// Indicates that the VCEK is not used in attestation and guest key derivation.
-    pub mask_chip_key, _: 1;
-    /// Indicates whether a VLEK hashtick is loaded
-    pub vlek_en, _: 2;
-    /// Indicates that the SNP_FEATURE_INFO command is available.
-    pub feature_info, _: 3;
-    /// Indicates that the RAPL is disabled.
-    pub rapl_dis, _: 4;
-    /// Indicates platform capable of ciphertext hiding for the DRAM.
-    pub ciphertext_hiding_dram_cap, _: 5;
-    /// Indicates ciphertext hiding is enabled for the DRAM.
-    pub ciphertext_hiding_dram_en, _: 6;
-    /// Indicates TIO is enbaled. Present if SEV-TIO feature bit is set.
-    pub is_tio_en, _: 7;
-}
-
-impl Encoder<()> for PlatformPolicy {
-    fn encode(&self, writer: &mut impl Write, _: ()) -> Result<(), std::io::Error> {
-        writer.write_bytes(self.0, ())?;
-        Ok(())
-    }
-}
-
-impl Decoder<()> for PlatformPolicy {
-    fn decode(reader: &mut impl Read, _: ()) -> Result<Self, std::io::Error> {
-        let policy = reader.read_bytes()?;
-        Ok(Self(policy))
-    }
-}
-
-impl ByteParser<()> for PlatformPolicy {
-    type Bytes = [u8; 4];
-    const EXPECTED_LEN: Option<usize> = Some(4);
-}
-
-impl Display for PlatformPolicy {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            r#"
-    MaskID ({}):
-    Mask Chip ID Enabled: {}
-    Mask Chip Key Enabled: {}
-    Vlek Enabled: {}
-    Feature Info Enabled {}
-    RAPL Disabled: {}
-    Ciphertext Capable: {}
-    Ciphertext enabled: {}
-    SEV-TIO enabled: {}"#,
-            self.0,
-            self.mask_chip_id(),
-            self.mask_chip_key(),
-            self.vlek_en(),
-            self.feature_info(),
-            self.rapl_dis(),
-            self.ciphertext_hiding_dram_cap(),
-            self.ciphertext_hiding_dram_en(),
-            self.is_tio_en()
-        )
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-/// Wrapped VLEK Hashstick strucutre.
-/// As defined in AMD's SEV-SNP specification chapter 8.30
-/// An address to a buffer containing this structure is passed to the snp_vlek_load command.
+#[cfg(feature = "snp")]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[repr(C, packed)]
+/// Wrapped VLEK data for FFI layer.
 pub struct WrappedVlekHashstick {
-    /// IV used to wrap chip-unique key
-    pub iv: [u8; 12], // 96 bits = 12 bytes
-
-    // Reserved [u8;4]
-    /// VLEK hashstick wrapped with a chip-unique key using AES-256-GCM
-    pub vlek_wrapped: [u8; 384],
-
-    /// The TCB version associated with this VLEK hashstick
-    pub tcb_version: TcbVersion,
-
-    // Reserved [u8;8]
-    /// AES-256-GCM authentication tag of the wrapped VLEK hashstick and TCB_VERSION
-    pub vlek_auth_tag: [u8; 16],
+    /// Wrapped VLEK data provided by AMD Key Distribution Server as bytes.
+    /// Address to this data is passed to the kernel.
+    pub data: [u8; HASHSTICK_BUFFER_LEN],
 }
 
-impl Default for WrappedVlekHashstick {
-    fn default() -> Self {
+impl std::convert::TryFrom<&[u8]> for WrappedVlekHashstick {
+    type Error = HashstickError;
+
+    fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
+        if value.len() != HASHSTICK_BUFFER_LEN {
+            return Err(HashstickError::InvalidLength);
+        }
+
+        if value == [0u8; HASHSTICK_BUFFER_LEN] {
+            return Err(HashstickError::EmptyHashstickBuffer);
+        }
+
+        // Validate reserved fields are zero as required by spec
+        // Check first reserved field (0x0C-0x0F)
+        if value[0x0C..0x10] != [0u8; 4] {
+            return Err(HashstickError::InvalidReservedField);
+        }
+
+        // Check second reserved field (0x198-0x19F)
+        if value[0x198..0x1A0] != [0u8; 8] {
+            return Err(HashstickError::InvalidReservedField);
+        }
+
+        let mut data = [0u8; HASHSTICK_BUFFER_LEN];
+        data.copy_from_slice(value);
+
+        Ok(Self { data })
+    }
+}
+
+#[cfg(feature = "snp")]
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
+#[repr(C, packed)]
+/// Structure used to load a VLEK hashstick into the AMD Secure Processor.
+pub struct SnpVlekLoad {
+    /// Length of this command buffer in bytes.
+    pub len: u32,
+
+    /// Version of wrapped VLEK hashstick (Must be 0h).
+    pub vlek_wrapped_version: u8,
+
+    _reserved: [u8; 3],
+
+    /// System Physical Address of wrapped VLEK hashstick ([WrappedVlekHashstick])
+    pub vlek_wrapped_address: u64,
+}
+
+#[cfg(feature = "snp")]
+impl SnpVlekLoad {
+    /// Creates a new VLEK load instruction from a hashstick.
+    pub fn new(hashstick: &WrappedVlekHashstick) -> Self {
+        hashstick.into()
+    }
+}
+
+impl From<&WrappedVlekHashstick> for SnpVlekLoad {
+    fn from(value: &WrappedVlekHashstick) -> Self {
         Self {
-            iv: Default::default(),
-            vlek_wrapped: [0u8; 384],
-            tcb_version: Default::default(),
-            vlek_auth_tag: Default::default(),
+            len: std::mem::size_of::<SnpVlekLoad>() as u32,
+            vlek_wrapped_version: 0u8,
+            _reserved: Default::default(),
+            vlek_wrapped_address: value as *const WrappedVlekHashstick as u64,
         }
     }
 }
 
-impl Encoder<Generation> for WrappedVlekHashstick {
-    fn encode(
-        &self,
-        writer: &mut impl Write,
-        generation: Generation,
-    ) -> Result<(), std::io::Error> {
-        writer.write_bytes(self.iv, ())?;
-        // Reserved [u8;4]
-        writer
-            .skip_bytes::<4>()?
-            .write_bytes(self.vlek_wrapped, ())?;
-        writer.write_bytes(self.tcb_version, generation)?;
-        // Reserved [u8;8]
-        writer
-            .skip_bytes::<8>()?
-            .write_bytes(self.vlek_auth_tag, ())?;
-        Ok(())
+#[cfg(feature = "snp")]
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
+#[repr(C, packed)]
+/// Kernel-friendly Snp Platform Status
+pub struct SnpPlatformStatus {
+    pub buffer: [u8; 32],
+}
+
+impl Deref for SnpPlatformStatus {
+    type Target = [u8];
+
+    fn deref(&self) -> &Self::Target {
+        &self.buffer
     }
 }
 
-impl Decoder<Generation> for WrappedVlekHashstick {
-    fn decode(reader: &mut impl Read, generation: Generation) -> Result<Self, std::io::Error> {
-        let iv = reader.read_bytes()?;
-        let vlek_wrapped = reader.skip_bytes::<4>()?.read_bytes()?;
-        let tcb_version = reader.read_bytes_with(generation)?;
-        let vlek_auth_tag = reader.skip_bytes::<8>()?.read_bytes()?;
-        Ok(Self {
-            iv,
-            vlek_wrapped,
-            tcb_version,
-            vlek_auth_tag,
-        })
+impl DerefMut for SnpPlatformStatus {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.buffer
     }
 }
 
-impl ByteParser<Generation> for WrappedVlekHashstick {
-    type Bytes = [u8; 432];
-    const EXPECTED_LEN: Option<usize> = Some(432);
+impl AsRef<[u8]> for SnpPlatformStatus {
+    fn as_ref(&self) -> &[u8] {
+        &self.buffer
+    }
 }
 
-impl Display for WrappedVlekHashstick {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            r#"
-    Wrapped VLEK Hashstick:
-    IV:                      {}
-    VLEK hashstic Wrapped:   {}
-    TCB: 
-    {}
-    VLEK authentication tag: {}"#,
-            HexLine(&self.iv),
-            HexLine(&self.vlek_wrapped),
-            self.tcb_version,
-            HexLine(&self.vlek_auth_tag)
-        )
+impl AsMut<[u8]> for SnpPlatformStatus {
+    fn as_mut(&mut self) -> &mut [u8] {
+        &mut self.buffer
     }
 }
 
 #[cfg(test)]
-mod tests {
-
-    use super::*;
-    use uuid::Uuid;
+mod test {
+        use crate::types::snp::platform::FFI::types::SnpSetConfig;
 
     #[test]
-    fn test_snp_platform_status_flags_zeroed() {
-        let actual: SnpPlatformStatusFlags = SnpPlatformStatusFlags(0);
-
-        assert!(!actual.is_owned());
-        assert!(!actual.is_encrypted_state_present());
-    }
-
-    #[test]
-    fn test_snp_platform_status_flags_full() {
-        let mut actual: SnpPlatformStatusFlags = SnpPlatformStatusFlags(0);
-
-        actual.0 |= 1;
-        actual.0 |= 1 << 8;
-        assert!(actual.is_owned());
-        assert!(actual.is_encrypted_state_present());
-    }
-
-    #[test]
-    fn test_cert_table_entry_creation() {
-        let data = vec![1, 2, 3, 4];
-        let entry = CertTableEntry::new(CertType::ARK, data.clone());
-
-        assert_eq!(entry.cert_type, CertType::ARK);
-        assert_eq!(entry.data(), &data);
-        assert_eq!(entry.guid_string(), "c0b406a4-a803-4952-9743-3fb6014cd0ae");
-    }
-
-    #[test]
-    fn test_cert_table_entry_from_guid() {
-        let guid = Uuid::parse_str("c0b406a4-a803-4952-9743-3fb6014cd0ae").unwrap();
-        let data = vec![1, 2, 3, 4];
-        let entry = CertTableEntry::from_guid(&guid, data.clone()).unwrap();
-
-        assert_eq!(entry.cert_type, CertType::ARK);
-        assert_eq!(entry.data(), &data);
-    }
-
-    #[test]
-    fn test_cert_table_entry_invalid_guid() {
-        let guid = Uuid::parse_str("11111111-1111-1111-1111-111111111111").unwrap();
-        let data = vec![1, 2, 3, 4];
-        let entry = CertTableEntry::from_guid(&guid, data.clone()).unwrap();
-
-        assert!(matches!(entry.cert_type, CertType::OTHER(_)));
-    }
-
-    #[test]
-    fn test_cert_table_entry_empty() {
-        let entry = CertTableEntry::new(CertType::Empty, vec![]);
-
-        assert_eq!(entry.cert_type, CertType::Empty);
-        assert!(entry.data().is_empty());
-        assert_eq!(entry.guid_string(), "00000000-0000-0000-0000-000000000000");
-    }
-
-    #[test]
-    fn test_cert_table_entry_ordering() {
-        let entry1 = CertTableEntry::new(CertType::ARK, vec![1]);
-        let entry2 = CertTableEntry::new(CertType::ASK, vec![2]);
-        let entry3 = CertTableEntry::new(CertType::Empty, vec![3]);
-
-        assert!(entry1 < entry2);
-        assert!(entry2 < entry3);
-        assert!(entry1 < entry3);
-    }
-
-    #[test]
-    fn test_cert_table_entry_data_access() {
-        let large_data = vec![0u8; 1024];
-        let entry = CertTableEntry::new(CertType::VCEK, large_data.clone());
-
-        assert_eq!(entry.data(), &large_data);
-    }
-
-    #[cfg(target_os = "linux")]
-    #[test]
-    fn test_cert_table_conversion() {
-        let entries = vec![
-            CertTableEntry::new(CertType::ARK, vec![1, 2, 3]),
-            CertTableEntry::new(CertType::ASK, vec![4, 5, 6]),
-        ];
-
-        let bytes = CertTableEntry::cert_table_to_vec_bytes(&entries).unwrap();
-        let converted = CertTableEntry::vec_bytes_to_cert_table(&mut bytes.clone()).unwrap();
-
-        assert_eq!(entries.len(), converted.len());
-        assert_eq!(entries[0].cert_type, converted[0].cert_type);
-        assert_eq!(entries[1].cert_type, converted[1].cert_type);
-    }
-
-    #[test]
-    #[cfg(feature = "snp")]
-    fn test_config() {
-        let tcb = TcbVersion::new(None, 1, 2, 3, 4);
-        let mask = MaskId(0x3);
-        let config = Config::new(tcb, mask);
-
-        assert_eq!(config.reported_tcb, tcb);
-        let config_mask = config.mask_id;
-        assert_eq!(config_mask, mask);
-
-        // Test conversion to FFI type
-        let snp_config: SnpSetConfig = (config, Generation::Milan).try_into().unwrap();
-        assert_eq!(snp_config.reported_tcb, tcb.to_legacy_bytes());
-        let snp_config_mask = snp_config.mask_id;
-
-        assert_eq!(snp_config_mask, mask);
-    }
-
-    // Test PlatformInit flags
-    #[test]
-    fn test_platform_init() {
-        let mut init = PlatformInit(0);
-
-        assert!(!init.is_rmp_init());
-        init.0 |= 1;
-        assert!(init.is_rmp_init());
-
-        assert!(!init.alias_check_complete());
-        init.0 |= 1 << 1;
-        assert!(init.alias_check_complete());
-
-        assert!(!init.is_tio_en());
-        init.0 |= 1 << 3;
-        assert!(init.is_tio_en());
-    }
-
-    // Test MaskId bitfield operations
-    #[test]
-    fn test_platform_status() {
-        let status = SnpPlatformStatus::default();
-        assert_eq!(status.state, 0);
-        assert_eq!(status.guest_count, 0);
-
-        let init_status = SnpPlatformStatus {
-            is_rmp_init: PlatformInit(1),
-            ..Default::default()
+    fn test_snp_set_config_default() {
+        let expected: SnpSetConfig = SnpSetConfig {
+            reported_tcb: Default::default(),
+            mask_id: Default::default(),
+            reserved: [0; 52],
         };
-        assert!(init_status.is_rmp_init.is_rmp_init());
+        let actual: SnpSetConfig = Default::default();
+        assert_eq!(expected, actual);
     }
 
-    // MaskId Tests
-    #[test]
-    #[cfg(feature = "snp")]
-    fn test_config_conversions() {
-        let tcb = TcbVersion::new(None, 1, 2, 3, 4);
-        let mask = MaskId(0x3);
-        let config = Config::new(tcb, mask);
+    mod raw_data {
 
-        let ffi_config: SnpSetConfig = (config, Generation::Milan).try_into().unwrap();
-        assert_eq!(ffi_config.reported_tcb, tcb.to_legacy_bytes());
-        let ffi_config_mask = ffi_config.mask_id;
-        assert_eq!(ffi_config_mask, mask);
+        use crate::firmware::host::types::RawData;
 
-        let converted_config: Config = (ffi_config, Generation::Milan).try_into().unwrap();
-        assert_eq!(converted_config.reported_tcb, tcb);
-        let converted_config_mask = converted_config.mask_id;
-        assert_eq!(converted_config_mask, mask);
-    }
+        #[test]
+        fn test_from_array() {
+            let expected: RawData = RawData::Vector(vec![1; 72]);
 
-    // SnpPlatformStatus Tests
-    #[test]
-    fn test_platform_status_initialization() {
-        let mut status = SnpPlatformStatus::default();
-        assert_eq!(status.state, 0);
-        assert_eq!(status.guest_count, 0);
+            let actual: RawData = [1; 72].into();
 
-        status.is_rmp_init = PlatformInit(1);
-        assert!(status.is_rmp_init.is_rmp_init());
+            assert_eq!(expected, actual);
+        }
 
-        status.platform_tcb_version = TcbVersion::new(None, 1, 2, 3, 4);
-        assert_eq!(status.platform_tcb_version.snp, 3);
-    }
+        #[test]
+        fn test_from_u8_slice() {
+            let mut value: [u8; 20] = [2; 20];
+            let value_slice: &mut [u8] = &mut value;
+            let expected: RawData = RawData::Vector(vec![2; 20]);
+            let actual: RawData = value_slice.into();
+            assert_eq!(expected, actual);
+        }
 
-    #[test]
-    #[cfg(feature = "snp")]
-    fn test_config_error_cases() {
-        let tcb = TcbVersion::new(None, 255, 255, 255, 255);
-        let mask = MaskId(u32::MAX);
-        let config = Config::new(tcb, mask);
+        #[test]
+        fn test_from_u8_ptr() {
+            let mut value: [u8; 20] = [2; 20];
+            let value_ref: *mut u8 = value.as_mut_ptr();
+            let expected: RawData = RawData::Pointer(value_ref);
+            let actual: RawData = value_ref.into();
+            assert_eq!(expected, actual);
+        }
 
-        let ffi_result: Result<SnpSetConfig, _> = (config, Generation::Milan).try_into();
-        assert!(ffi_result.is_ok());
+        #[test]
+        fn test_from_u8_vec() {
+            let value: Vec<u8> = vec![2; 20];
+            let expected: RawData = RawData::Vector(vec![2; 20]);
+            let actual: RawData = value.into();
+            assert_eq!(expected, actual);
+        }
 
-        let default_config = Config::default();
-        assert_eq!(default_config.reported_tcb, Default::default());
-        let default_config_mask_id = default_config.mask_id;
-        assert_eq!(default_config_mask_id, Default::default());
-    }
+        #[test]
+        fn test_from_u8_vec_ref() {
+            let value: Vec<u8> = vec![2; 20];
+            let actual: RawData = (&value).into();
+            let expected: RawData = RawData::Vector(value);
+            assert_eq!(expected, actual);
+        }
 
-    #[test]
-    #[cfg(feature = "snp")]
-    fn test_config_edge_cases() {
-        // Test with maximum values
-        let tcb = TcbVersion::new(Some(255), 255, 255, 255, 255);
-        let mask_id = MaskId(u32::MAX);
-        let config = Config::new(tcb, mask_id);
-
-        // Convert to SnpSetConfig
-        let result: Result<SnpSetConfig, _> = (config, Generation::Turin).try_into();
-        assert!(result.is_ok());
-        let snp_config = result.unwrap();
-
-        // Convert back to Config
-        let result: Result<Config, _> = (snp_config, Generation::Turin).try_into();
-        assert!(result.is_ok());
-        let round_trip = result.unwrap();
-
-        assert_eq!(round_trip.reported_tcb, tcb);
-        let round_trip_mask_id = round_trip.mask_id;
-        assert_eq!(round_trip_mask_id, mask_id);
-
-        // Test with minimum values
-        let tcb = TcbVersion::new(Some(0), 0, 0, 0, 0);
-        let mask_id = MaskId(0);
-        let config = Config::new(tcb, mask_id);
-
-        // Convert to SnpSetConfig
-        let result: Result<SnpSetConfig, _> = (config, Generation::Turin).try_into();
-        assert!(result.is_ok());
-        let snp_config = result.unwrap();
-
-        // Convert back to Config
-        let result: Result<Config, _> = (snp_config, Generation::Turin).try_into();
-        assert!(result.is_ok());
-        let round_trip = result.unwrap();
-
-        assert_eq!(round_trip.reported_tcb, tcb);
-        let round_trip_mask_id = round_trip.mask_id;
-        assert_eq!(round_trip_mask_id, mask_id);
-    }
-
-    #[test]
-    #[cfg(feature = "snp")]
-    fn test_different_generation_conversions() {
-        let tcb = TcbVersion::new(Some(1), 2, 3, 4, 5);
-        let mask_id = MaskId(0x3);
-        let config = Config::new(tcb, mask_id);
-
-        // Test all generations
-        let generations = [
-            Generation::Milan,
-            Generation::Genoa,
-            Generation::Turin,
-            Generation::Venice,
-        ];
-
-        for generation in generations {
-            // Convert to SnpSetConfig
-            let snp_config: Result<SnpSetConfig, _> = (config, generation).try_into();
-            assert!(snp_config.is_ok());
-            let snp_config = snp_config.unwrap();
-
-            // Convert back to Config
-            let round_trip: Result<Config, _> = (snp_config, generation).try_into();
-            assert!(round_trip.is_ok());
-            let round_trip = round_trip.unwrap();
-
-            // For non-Turin generations, FMC will be lost in the conversion
-            match generation {
-                Generation::Turin | Generation::Venice => assert_eq!(round_trip.reported_tcb, tcb),
-                _ => {
-                    // FMC field is not preserved for legacy generations
-                    assert_eq!(round_trip.reported_tcb.bootloader, tcb.bootloader);
-                    assert_eq!(round_trip.reported_tcb.tee, tcb.tee);
-                    assert_eq!(round_trip.reported_tcb.snp, tcb.snp);
-                    assert_eq!(round_trip.reported_tcb.microcode, tcb.microcode);
-                    assert_eq!(round_trip.reported_tcb.fmc, None); // FMC lost in legacy format
-                }
-            }
-            let round_trip_mask_id = round_trip.mask_id;
-            assert_eq!(round_trip_mask_id, mask_id);
+        #[test]
+        fn test_from_u8_vec_mut_ref() {
+            let mut value: Vec<u8> = vec![2; 20];
+            let actual: RawData = (&mut value).into();
+            let expected: RawData = RawData::Vector(value);
+            assert_eq!(expected, actual);
         }
     }
 
-    #[test]
-    fn test_platform_status_boundary() {
-        let status = SnpPlatformStatus {
-            guest_count: u32::MAX,
-            build_id: u32::MAX,
-            platform_policy: PlatformPolicy(u32::MAX),
-            ..Default::default()
-        };
-
-        assert_eq!(status.guest_count, u32::MAX);
-        assert_eq!(status.build_id, u32::MAX);
-    }
-
-    #[test]
-    fn test_config_reserved() {
-        let config = Config::default();
-        assert_eq!(config.reserved, [0u8; 52]);
-    }
-
-    #[test]
-    fn test_platform_status_all_fields() {
-        let status: SnpPlatformStatus = SnpPlatformStatus {
-            version: (1, 2),
-            build_id: 0xDEADBEEF,
-            platform_policy: PlatformPolicy(0x7f),
-            state: 0xFF,
-            ..Default::default()
-        };
-        assert_eq!(status.version.0, 1);
-        assert_eq!(status.version.1, 2);
-        assert_eq!(status.build_id, 0xDEADBEEF);
-        assert!(status.platform_policy.mask_chip_id());
-        assert!(status.platform_policy.mask_chip_key());
-        assert!(status.platform_policy.vlek_en());
-        assert!(status.platform_policy.feature_info());
-        assert!(status.platform_policy.rapl_dis());
-        assert!(status.platform_policy.ciphertext_hiding_dram_cap());
-        assert!(status.platform_policy.ciphertext_hiding_dram_en());
-        assert_eq!(status.state, 0xFF);
-    }
-
-    #[test]
-    fn test_cert_table_entry_deserialization() {
-        let entry = CertTableEntry::new(CertType::ARK, vec![1, 2, 3, 4]);
-
-        let serialized = entry.to_bytes().unwrap();
-
-        let deserialized = CertTableEntry::from_bytes(&serialized).unwrap();
-
-        let entry = CertTableEntry::new(CertType::ARK, vec![1, 2, 3, 4]);
-
-        assert_eq!(entry.cert_type, deserialized.cert_type);
-        assert_eq!(entry.data, deserialized.data);
-    }
-
-    #[test]
-    fn test_cert_table_entry_cmp_complete() {
-        let entries = vec![
-            CertTableEntry::new(CertType::ARK, vec![1]),
-            CertTableEntry::new(CertType::VCEK, vec![2]),
-            CertTableEntry::new(CertType::Empty, vec![4]),
-            CertTableEntry::new(CertType::ASK, vec![3]),
-        ];
-
-        let mut sorted = entries.clone();
-        sorted.sort();
-
-        assert_eq!(sorted[0].cert_type, CertType::ARK);
-        assert_eq!(sorted[1].cert_type, CertType::VCEK);
-        assert_eq!(sorted[2].cert_type, CertType::ASK);
-        assert_eq!(sorted[3].cert_type, CertType::Empty);
-    }
-
-    #[test]
-    fn test_cert_table_entry_complete_ordering() {
-        let entries = vec![
-            CertTableEntry::new(CertType::ARK, vec![1, 2, 3]),
-            CertTableEntry::new(CertType::ARK, vec![9, 9, 9]), // Same type, different data
-            CertTableEntry::new(CertType::VCEK, vec![1]),
-            CertTableEntry::new(CertType::ASK, vec![2]),
-            CertTableEntry::new(CertType::CRL, vec![3]),
-            CertTableEntry::new(CertType::Empty, vec![]),
-            CertTableEntry::new(
-                CertType::OTHER(Uuid::parse_str("11111111-1111-1111-1111-111111111111").unwrap()),
-                vec![4],
-            ),
-            CertTableEntry::new(
-                CertType::OTHER(Uuid::parse_str("22222222-2222-2222-2222-222222222222").unwrap()),
-                vec![5],
-            ),
-        ];
-
-        // Test equality
-        assert_eq!(entries[0], entries[0]);
-
-        // Test ordering
-        assert!(entries[0] < entries[2]); // ARK < VCEK
-        assert!(entries[2] < entries[3]); // VCEK < ASK
-        assert!(entries[3] < entries[4]); // ASK < CRL
-        assert!(entries[4] < entries[6]); // CRL < OTHER
-        assert!(entries[6] < entries[7]); // OTHER orders by UUID
-        assert!(entries[6] < entries[5]); // OTHER < Empty
-
-        // Test transitivity
-        assert!(entries[0] < entries[3]); // ARK < ASK
-        assert!(entries[0] < entries[5]); // ARK < Empty
-
-        // Verify reverse comparisons
-        assert!(entries[5] > entries[0]); // Empty > ARK
-        assert!(entries[4] > entries[3]); // CRL > ASK
-    }
-
-    #[test]
-    fn test_cert_table_entry_sort_and_compare() {
-        let mut entries = vec![
-            CertTableEntry::new(CertType::Empty, vec![]),
-            CertTableEntry::new(CertType::CRL, vec![1]),
-            CertTableEntry::new(
-                CertType::OTHER(Uuid::parse_str("33333333-3333-3333-3333-333333333333").unwrap()),
-                vec![2],
-            ),
-            CertTableEntry::new(
-                CertType::OTHER(Uuid::parse_str("11111111-1111-1111-1111-111111111111").unwrap()),
-                vec![3],
-            ),
-            CertTableEntry::new(CertType::ARK, vec![4]),
-            CertTableEntry::new(CertType::ASK, vec![5]),
-            CertTableEntry::new(CertType::VCEK, vec![6]),
-            CertTableEntry::new(CertType::VLEK, vec![7]),
-        ];
-
-        let expected = vec![
-            CertTableEntry::new(CertType::ARK, vec![4]),
-            CertTableEntry::new(CertType::VCEK, vec![6]),
-            CertTableEntry::new(CertType::VLEK, vec![7]),
-            CertTableEntry::new(CertType::ASK, vec![5]),
-            CertTableEntry::new(CertType::CRL, vec![1]),
-            CertTableEntry::new(
-                CertType::OTHER(Uuid::parse_str("11111111-1111-1111-1111-111111111111").unwrap()),
-                vec![3],
-            ),
-            CertTableEntry::new(
-                CertType::OTHER(Uuid::parse_str("33333333-3333-3333-3333-333333333333").unwrap()),
-                vec![2],
-            ),
-            CertTableEntry::new(CertType::Empty, vec![]),
-        ];
-
-        entries.sort();
-        assert_eq!(entries, expected);
-
-        // Verify stability with duplicate types
-        let mut duplicates = [
-            CertTableEntry::new(CertType::ARK, vec![1]),
-            CertTableEntry::new(CertType::ARK, vec![2]),
-        ];
-        duplicates.sort();
-        assert_eq!(duplicates[0].data(), &[1]);
-        assert_eq!(duplicates[1].data(), &[2]);
-    }
-
-    #[test]
-    fn test_cert_table_entry_direct_cmp() {
-        let entry1 = CertTableEntry::new(CertType::ARK, vec![1]);
-        let entry2 = CertTableEntry::new(CertType::VCEK, vec![2]);
-
-        // Direct call to cmp() method to ensure coverage
-        let ordering = entry1.cmp(&entry2);
-        assert!(matches!(ordering, std::cmp::Ordering::Less));
-
-        // Reverse comparison
-        let ordering = entry2.cmp(&entry1);
-        assert!(matches!(ordering, std::cmp::Ordering::Greater));
-
-        // Equal comparison
-        let ordering = entry1.cmp(&entry1);
-        assert!(matches!(ordering, std::cmp::Ordering::Equal));
-    }
-
-    #[test]
-    fn test_cert_table_entry_direct_cmp_vlek() {
-        let entry1 = CertTableEntry::new(CertType::ARK, vec![1]);
-        let entry2 = CertTableEntry::new(CertType::VLEK, vec![2]);
-
-        // Direct call to cmp() method to ensure coverage
-        let ordering = entry1.cmp(&entry2);
-        assert!(matches!(ordering, std::cmp::Ordering::Less));
-
-        // Reverse comparison
-        let ordering = entry2.cmp(&entry1);
-        assert!(matches!(ordering, std::cmp::Ordering::Greater));
-
-        // Equal comparison
-        let ordering = entry1.cmp(&entry1);
-        assert!(matches!(ordering, std::cmp::Ordering::Equal));
-    }
-    #[test]
-    fn test_cert_table_entry_deserialize() {
-        // Create a test entry
-        let original = CertTableEntry::new(CertType::ARK, vec![0x41, 0x42, 0x43]);
-
-        // Serialize and then deserialize
-        let serialized = original.to_bytes().unwrap();
-        let deserialized = CertTableEntry::from_bytes(&serialized).unwrap();
-
-        // Create a test entry
-        let original = CertTableEntry::new(CertType::ARK, vec![0x41, 0x42, 0x43]);
-        // Verify deserialized data matches original
-        assert_eq!(deserialized.cert_type, original.cert_type);
-        assert_eq!(deserialized.data(), original.data());
-    }
-
-    #[test]
     #[cfg(target_os = "linux")]
-    fn test_chain_visitor_methods() {
-        // Test sequence visiting
-        let chain_data = vec![
-            CertTableEntry::new(CertType::ARK, vec![1]),
-            CertTableEntry::new(CertType::ASK, vec![2]),
+    mod hashstick {
+        use std::convert::TryFrom;
+
+        use crate::{error::HashstickError, firmware::host::types::SnpVlekLoad};
+
+        use super::super::{WrappedVlekHashstick, HASHSTICK_BUFFER_LEN};
+
+        const VALID_HASHSTICK_BYTES: [u8; HASHSTICK_BUFFER_LEN] = [
+            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+            1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
         ];
-        let mut serialized = CertTableEntry::cert_table_to_vec_bytes(&chain_data).unwrap();
-        let deserialized = CertTableEntry::vec_bytes_to_cert_table(&mut serialized).unwrap();
 
-        assert_eq!(deserialized.len(), chain_data.len());
-        assert_eq!(deserialized[0].cert_type, chain_data[0].cert_type);
+        const INVALID_HASHSTICK_BYTES: [u8; 25] = [2u8; 25];
+
+        #[test]
+        fn test_bytes_to_wrapped_hashstick() {
+            let bytes: [u8; HASHSTICK_BUFFER_LEN] = VALID_HASHSTICK_BYTES;
+            let expected: WrappedVlekHashstick = WrappedVlekHashstick { data: bytes };
+            let actual: WrappedVlekHashstick =
+                WrappedVlekHashstick::try_from(VALID_HASHSTICK_BYTES.as_slice()).unwrap();
+
+            assert_eq!(actual, expected)
+        }
+
+        #[test]
+        fn test_invalid_bytes_to_wrapped_hashstick() {
+            assert_eq!(
+                WrappedVlekHashstick::try_from(INVALID_HASHSTICK_BYTES.as_slice()).unwrap_err(),
+                HashstickError::InvalidLength
+            );
+        }
+
+        #[test]
+        fn test_empty_buffer_to_wrapped_hashstick() {
+            assert_eq!(
+                WrappedVlekHashstick::try_from([0; HASHSTICK_BUFFER_LEN].as_slice()).unwrap_err(),
+                HashstickError::EmptyHashstickBuffer
+            )
+        }
+
+        #[test]
+        fn test_wrapped_hashtick_into_snp_vlek_load() {
+            let test_hashstick: WrappedVlekHashstick =
+                WrappedVlekHashstick::try_from(VALID_HASHSTICK_BYTES.as_slice()).unwrap();
+
+            let actual: SnpVlekLoad = (&test_hashstick).into();
+
+            let expected: SnpVlekLoad = SnpVlekLoad {
+                len: std::mem::size_of::<SnpVlekLoad>() as u32,
+                vlek_wrapped_version: 0u8,
+                _reserved: Default::default(),
+                vlek_wrapped_address: &test_hashstick as *const WrappedVlekHashstick as u64,
+            };
+
+            assert_eq!(actual, expected);
+        }
+
+        #[test]
+        fn test_snp_vlek_load_new() {
+            let test_hashstick: WrappedVlekHashstick =
+                WrappedVlekHashstick::try_from(VALID_HASHSTICK_BYTES.as_slice()).unwrap();
+
+            let actual: SnpVlekLoad = SnpVlekLoad::new(&test_hashstick);
+
+            let expected: SnpVlekLoad = SnpVlekLoad {
+                len: std::mem::size_of::<SnpVlekLoad>() as u32,
+                vlek_wrapped_version: 0u8,
+                _reserved: Default::default(),
+                vlek_wrapped_address: &test_hashstick as *const WrappedVlekHashstick as u64,
+            };
+
+            assert_eq!(actual, expected);
+        }
     }
 
-    #[test]
-    fn test_snp_platform_status_flags_bitor_assign() {
-        let mut flags1 = SnpPlatformStatusFlags::default();
-        let flags2 = SnpPlatformStatusFlags::default();
-        flags1 |= flags2;
-        assert_eq!(flags1.0, 0);
+    #[cfg(target_os = "linux")]
+    mod cert_table_entry {
 
-        let mut flags1 = SnpPlatformStatusFlags(1);
-        let flags2 = SnpPlatformStatusFlags(2);
-        flags1 |= flags2;
-        assert_eq!(flags1.0, 3);
-    }
+        use crate::types::snp::platform as UAPI;
+        use crate::firmware::host::types::CertTableEntry;
+        use uuid::Uuid;
 
-    #[test]
-    fn test_platform_init_bitor_assign() {
-        let mut init1: PlatformInit = Default::default();
-        let init2: PlatformInit = Default::default();
-        init1 |= init2;
-        assert_eq!(init1.0, 0);
+        fn build_vec_uapi_cert_table() -> Vec<UAPI::CertTableEntry> {
+            vec![
+                UAPI::CertTableEntry::new(UAPI::CertType::ARK, vec![1; 25]),
+                UAPI::CertTableEntry::new(UAPI::CertType::ASK, vec![2; 25]),
+                UAPI::CertTableEntry::new(UAPI::CertType::VCEK, vec![5; 15]),
+                UAPI::CertTableEntry::new(
+                    UAPI::CertType::OTHER(
+                        Uuid::parse_str("fbb6ed74-e73e-44ab-8893-4252792d737a").unwrap(),
+                    ),
+                    vec![7; 6],
+                ),
+            ]
+        }
 
-        let mut init1 = PlatformInit(1);
-        let init2 = PlatformInit(2);
-        init1 |= init2;
-        assert_eq!(init1.0, 3);
-    }
+        #[test]
+        fn test_uapi_to_vec_bytes() {
+            let expected: Vec<u8> = vec![
+                192, 180, 6, 164, 168, 3, 73, 82, 151, 67, 63, 182, 1, 76, 208, 174, 120, 0, 0, 0,
+                25, 0, 0, 0, 74, 183, 179, 121, 187, 172, 79, 228, 160, 47, 5, 174, 243, 39, 199,
+                130, 145, 0, 0, 0, 25, 0, 0, 0, 99, 218, 117, 141, 230, 100, 69, 100, 173, 197,
+                244, 185, 59, 232, 172, 205, 170, 0, 0, 0, 15, 0, 0, 0, 251, 182, 237, 116, 231,
+                62, 68, 171, 136, 147, 66, 82, 121, 45, 115, 122, 185, 0, 0, 0, 6, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1,
+                1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2,
+                2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
+                5, 5, 5, 7, 7, 7, 7, 7, 7,
+            ];
+            let data: Vec<UAPI::CertTableEntry> = build_vec_uapi_cert_table();
+            let actual: Vec<u8> = CertTableEntry::uapi_to_vec_bytes(&data).unwrap();
+            assert_eq!(expected, actual);
+        }
 
-    #[test]
-    fn test_snp_platform_status_non_turin() {
-        let expected: SnpPlatformStatus = SnpPlatformStatus {
-            version: (1, 1),
-            state: 1,
-            is_rmp_init: PlatformInit(1),
-            build_id: 1,
-            platform_policy: PlatformPolicy(1),
-            guest_count: 0,
-            platform_tcb_version: TcbVersion {
-                fmc: None,
-                bootloader: 1,
-                tee: 1,
-                snp: 1,
-                microcode: 1,
-            },
-            reported_tcb_version: TcbVersion {
-                fmc: None,
-                bootloader: 1,
-                tee: 1,
-                snp: 1,
-                microcode: 1,
-            },
-        };
-        let raw_actual: FFI::types::SnpPlatformStatus = FFI::types::SnpPlatformStatus {
-            buffer: [
-                1, 1, 1, 1, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, // Other stuff
-                1, 1, 0, 0, 0, 0, 1, 1, //Platform TCB
-                1, 1, 0, 0, 0, 0, 1, 1, //Reported TCB
-            ],
-        };
-        let actual =
-            SnpPlatformStatus::from_bytes_with(&raw_actual.buffer, Generation::Milan).unwrap();
-        assert_eq!(actual, expected);
-    }
+        #[test]
+        fn test_parse_table_regular() {
+            let mut cert_bytes: Vec<u8> = vec![
+                192, 180, 6, 164, 168, 3, 73, 82, 151, 67, 63, 182, 1, 76, 208, 174, 120, 0, 0, 0,
+                25, 0, 0, 0, 74, 183, 179, 121, 187, 172, 79, 228, 160, 47, 5, 174, 243, 39, 199,
+                130, 145, 0, 0, 0, 25, 0, 0, 0, 99, 218, 117, 141, 230, 100, 69, 100, 173, 197,
+                244, 185, 59, 232, 172, 205, 170, 0, 0, 0, 15, 0, 0, 0, 251, 182, 237, 116, 231,
+                62, 68, 171, 136, 147, 66, 82, 121, 45, 115, 122, 185, 0, 0, 0, 6, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1,
+                1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2,
+                2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
+                5, 5, 5, 7, 7, 7, 7, 7, 7,
+            ];
 
-    #[test]
-    fn test_snp_platform_status_turin() {
-        let expected: SnpPlatformStatus = SnpPlatformStatus {
-            version: (1, 1),
-            state: 1,
-            is_rmp_init: PlatformInit(1),
-            build_id: 1,
-            platform_policy: PlatformPolicy(1),
-            guest_count: 0,
-            platform_tcb_version: TcbVersion {
-                fmc: Some(1),
-                bootloader: 1,
-                tee: 1,
-                snp: 1,
-                microcode: 1,
-            },
-            reported_tcb_version: TcbVersion {
-                fmc: Some(1),
-                bootloader: 1,
-                tee: 1,
-                snp: 1,
-                microcode: 1,
-            },
-        };
-        let raw_actual: FFI::types::SnpPlatformStatus = FFI::types::SnpPlatformStatus {
-            buffer: [
-                1, 1, 1, 1, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, // Other stuff
-                1, 1, 1, 1, 0, 0, 0, 1, //Platform TCB
-                1, 1, 1, 1, 0, 0, 0, 1, //Reported TCB
-            ],
-        };
-        let actual =
-            SnpPlatformStatus::from_bytes_with(&raw_actual.buffer, Generation::Turin).unwrap();
-        assert_eq!(actual, expected);
-    }
+            let cert_bytes_ptr: *mut CertTableEntry =
+                cert_bytes.as_mut_ptr() as *mut CertTableEntry;
 
-    #[test]
-    fn test_wrapped_vlek_hashstick_from_bytes() {
-        // Create a test buffer with the correct layout
-        let mut test_buffer = Vec::with_capacity(432);
+            let actual: Vec<UAPI::CertTableEntry> =
+                unsafe { CertTableEntry::parse_table(cert_bytes_ptr).unwrap() };
 
-        // IV (12 bytes)
-        test_buffer.extend_from_slice(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+            let expected: Vec<UAPI::CertTableEntry> = build_vec_uapi_cert_table();
 
-        // Reserved field 1 (4 bytes of zeros)
-        test_buffer.extend_from_slice(&[0, 0, 0, 0]);
+            assert_eq!(expected, actual);
+        }
 
-        // VLEK_WRAPPED (384 bytes)
-        test_buffer.extend_from_slice(&[42; 384]);
+        #[test]
+        #[should_panic]
+        fn test_parse_table_offset_short() {
+            let mut cert_bytes: Vec<u8> = vec![
+                192, 180, 6, 164, 168, 3, 73, 82, 151, 67, 63, 182, 1, 76, 208, 174, 120, 0, 0, 0,
+                1, 0, 0, 0, 74, 183, 179, 121, 187, 172, 79, 228, 160, 47, 5, 174, 243, 39, 199,
+                130, 145, 0, 0, 0, 25, 0, 0, 0, 99, 218, 117, 141, 230, 100, 69, 100, 173, 197,
+                244, 185, 59, 232, 172, 205, 170, 0, 0, 0, 15, 0, 0, 0, 251, 182, 237, 116, 231,
+                62, 68, 171, 136, 147, 66, 82, 121, 45, 115, 122, 185, 0, 0, 0, 6, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1,
+                1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2,
+                2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
+                5, 5, 5, 7, 7, 7, 7, 7, 7,
+            ];
 
-        // TCB_VERSION (8 bytes)
-        test_buffer.extend_from_slice(&[1, 2, 0, 0, 0, 0, 3, 4]); // bootloader=1, tee=2, snp=3, microcode=4
+            let cert_bytes_ptr: *mut CertTableEntry =
+                cert_bytes.as_mut_ptr() as *mut CertTableEntry;
 
-        // Reserved field 2 (8 bytes of zeros)
-        test_buffer.extend_from_slice(&[0, 0, 0, 0, 0, 0, 0, 0]);
+            let actual: Vec<UAPI::CertTableEntry> =
+                unsafe { CertTableEntry::parse_table(cert_bytes_ptr).unwrap() };
 
-        // VLEK_AUTH_TAG (16 bytes)
-        test_buffer.extend_from_slice(&[9, 8, 7, 6, 5, 4, 3, 2, 1, 0, 0, 0, 0, 0, 0, 0]);
+            let expected: Vec<UAPI::CertTableEntry> = build_vec_uapi_cert_table();
 
-        // Parse the buffer
-        let hashstick =
-            WrappedVlekHashstick::from_bytes_with(test_buffer.as_slice(), Generation::Milan)
-                .unwrap();
-
-        // Verify the fields
-        assert_eq!(hashstick.iv, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
-        assert_eq!(hashstick.vlek_wrapped.as_ref(), &[42; 384]);
-        assert_eq!(hashstick.tcb_version.bootloader, 1);
-        assert_eq!(hashstick.tcb_version.tee, 2);
-        assert_eq!(hashstick.tcb_version.snp, 3);
-        assert_eq!(hashstick.tcb_version.microcode, 4);
-        assert_eq!(
-            hashstick.vlek_auth_tag,
-            [9, 8, 7, 6, 5, 4, 3, 2, 1, 0, 0, 0, 0, 0, 0, 0]
-        );
-    }
-
-    #[test]
-    fn test_wrapped_vlek_hashstick_to_bytes() {
-        // Create a test hashstick
-        let hashstick = WrappedVlekHashstick {
-            iv: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
-            vlek_wrapped: [42; 384],
-            tcb_version: TcbVersion::new(None, 1, 2, 3, 4),
-            vlek_auth_tag: [9, 8, 7, 6, 5, 4, 3, 2, 1, 0, 0, 0, 0, 0, 0, 0],
-        };
-
-        let buffer = hashstick.to_bytes_with(Generation::Milan).unwrap();
-
-        // Verify the buffer is the correct length
-        assert_eq!(buffer.len(), 432);
-
-        // Verify the fields were written correctly
-        assert_eq!(&buffer[0..12], &[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]); // IV
-        assert_eq!(&buffer[0x0C..0x10], &[0, 0, 0, 0]); // Reserved field 1
-        assert_eq!(&buffer[0x10..0x190], &[42; 384]); // VLEK_WRAPPED
-
-        // TCB_VERSION format depends on the CPU generation, so we'll read it back
-        let tcb_bytes = &buffer[0x190..0x198];
-
-        let tcb = TcbVersion::from_bytes_with(tcb_bytes, Generation::Milan).unwrap();
-        assert_eq!(tcb.bootloader, 1);
-        assert_eq!(tcb.tee, 2);
-        assert_eq!(tcb.snp, 3);
-        assert_eq!(tcb.microcode, 4);
-
-        assert_eq!(&buffer[0x198..0x1A0], &[0, 0, 0, 0, 0, 0, 0, 0]); // Reserved field 2
-        assert_eq!(
-            &buffer[0x1A0..0x1B0],
-            &[9, 8, 7, 6, 5, 4, 3, 2, 1, 0, 0, 0, 0, 0, 0, 0]
-        ); // VLEK_AUTH_TAG
-    }
-
-    #[test]
-    fn test_wrapped_vlek_hashstick_invalid_length() {
-        // Test with a buffer that's too short
-        let test_buffer = [0u8; 431]; // One byte too short
-        let result = WrappedVlekHashstick::from_bytes_with(&test_buffer, Generation::Milan);
-        assert!(result.is_err());
-
-        // Test with a buffer that's too long
-        let test_buffer = [0u8; 433]; // One byte too long
-        let result = WrappedVlekHashstick::from_bytes_with(&test_buffer, Generation::Milan);
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_wrapped_vlek_hashstick_display() {
-        // Create a test hashstick
-        let hashstick = WrappedVlekHashstick {
-            iv: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
-            vlek_wrapped: [42; 384],
-            tcb_version: TcbVersion::new(None, 1, 2, 3, 4),
-            vlek_auth_tag: [9, 8, 7, 6, 5, 4, 3, 2, 1, 0, 0, 0, 0, 0, 0, 0],
-        };
-
-        // Convert to string and check contents
-        let display_string = format!("{}", hashstick);
-        assert!(display_string.contains("Wrapped VLEK Hashstick:"));
-        assert!(display_string.contains("IV:"));
-        assert!(display_string.contains("VLEK hashstic Wrapped:"));
-        assert!(display_string.contains("TCB:"));
-        assert!(display_string.contains("VLEK authentication tag:"));
+            assert_eq!(
+                expected, actual,
+                "Invalid certificate offset encountered..."
+            );
+        }
     }
 }

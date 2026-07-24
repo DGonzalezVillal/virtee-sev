@@ -106,7 +106,7 @@ mod tests {
     #[cfg(feature = "openssl")]
     mod openssl_tests {
         use super::*;
-        use openssl::bn::BigNum;
+        use openssl::{bn::BigNum, ecdsa};
         use std::convert::TryInto;
 
         #[test]

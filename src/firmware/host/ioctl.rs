@@ -53,6 +53,7 @@ impl_const_id! {
     pub Id => u32;
 
     GetId<'_> = 0x8, /* GET_ID2 is 0x8, the deprecated GET_ID ioctl is 0x7 */
+    PlatformStatus = 0x1,
     SnpPlatformStatus = 0x9,
     SnpCommit = 0xA,
     SnpSetConfig = 0xB,
@@ -66,7 +67,7 @@ const SEV: Group = Group::new(b'S');
 pub const PLATFORM_RESET: Ioctl<WriteRead, &Command<PlatformReset>> = unsafe { SEV.write_read(0) };
 
 /// Gathers a status report from the SEV firmware.
-#[cfg(feature = "sev")]
+#[cfg(any(feature = "sev", feature = "snp"))]
 pub const PLATFORM_STATUS: Ioctl<WriteRead, &Command<PlatformStatus>> =
     unsafe { SEV.write_read(0) };
 
@@ -180,8 +181,8 @@ mod tests {
         assert_eq!(error, 0);
     }
 
-    #[cfg(feature = "sev")]
-    mod sev_specific_tests {
+    #[cfg(any(feature = "sev", feature = "snp"))]
+    mod platform_status_tests {
         use super::super::*;
 
         #[test]
@@ -193,6 +194,8 @@ mod tests {
             assert_eq!(code, PlatformStatus::ID);
             assert_eq!(error, 0);
         }
+
+        #[cfg(feature = "sev")]
         #[test]
         fn test_command_platform_status_non_mut() {
             let data = PlatformStatus::default();

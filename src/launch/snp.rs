@@ -7,7 +7,7 @@
 #[cfg(target_os = "linux")]
 use crate::{
     error::FirmwareError,
-    snp::types::GuestPolicy,
+    types::snp::GuestPolicy,
     launch::linux::{ioctl::*, shared::*, snp::*},
 };
 

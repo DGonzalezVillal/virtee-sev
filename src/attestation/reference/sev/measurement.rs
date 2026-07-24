@@ -2,7 +2,7 @@
 
 //! Operations to calculate guest measurement for different SEV modes
 use crate::attestation::reference::sev_hashes::SevHashes;
-use crate::snp::types::launch::{
+use crate::types::shared::launch::{
     ovmf::OVMF,
     vcpu::CpuType,
     vmsa::{GuestFeatures, VMMType, VMSA},

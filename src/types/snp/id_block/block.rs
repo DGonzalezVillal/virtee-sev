@@ -4,7 +4,7 @@ use super::{DEFAULT_ID_POLICY, DEFAULT_ID_VERSION, ids::{FamilyId, ImageId}};
 use crate::{
     error::IdBlockError,
     parser::{ByteParser, Decoder, Encoder},
-    snp::types::{GuestPolicy, SnpLaunchDigest},
+    types::snp::{GuestPolicy, SnpLaunchDigest},
     util::parser_helper::{ReadExt, WriteExt},
 };
 

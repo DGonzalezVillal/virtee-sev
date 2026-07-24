@@ -6,7 +6,7 @@
 
 use crate::{
     error::{FirmwareError, SevError},
-    firmware::host::Version,
+    types::sev::Version,
     parser::{Decoder, Encoder},
     util::{TypeLoad, TypeSave},
 };

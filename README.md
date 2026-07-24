@@ -57,7 +57,7 @@ For SEV-SNP remote attestation, use the [`attestation`](https://docs.rs/sev/late
 | `attestation::attester` | Guest evidence collection (`/dev/sev-guest`) |
 | `attestation::reference` | Reference values (launch digest, ID block) |
 
-Shared SNP firmware ABI wire types live in [`snp::types`](https://docs.rs/sev/latest/sev/snp/types/), including guest launch layouts under `snp::types::launch`.
+Shared firmware ABI wire types live in [`types`](https://docs.rs/sev/latest/sev/types/), organized as `types::snp`, `types::sev`, and `types::shared` (OVMF, vCPU models, VMSA pages).
 
 ## Legacy SEV attestation
 
@@ -72,7 +72,7 @@ For first-generation SEV (`feature = "sev"`), the same [`attestation`](https://d
 
 ## Platform Management
 
-Refer to the [firmware](https://docs.rs/sev/latest/sev/firmware/) module for more information.
+[`platform::Firmware`](https://docs.rs/sev/latest/sev/platform/struct.Firmware.html) is the shared `/dev/sev` handle. Generation-specific APIs and types live in [`platform::sev`](https://docs.rs/sev/latest/sev/platform/sev/index.html) (legacy SEV) and [`platform::snp`](https://docs.rs/sev/latest/sev/platform/snp/index.html) (SEV-SNP). ABI wire types are under [`types`](https://docs.rs/sev/latest/sev/types/).
 
 ## Guest Management
 
@@ -114,7 +114,7 @@ library, and a C header:
 
 `cargo cinstall --prefix=/usr --libdir=/usr/lib64`
 
-[firmware]: ./src/firmware/
+[platform]: ./src/platform/
 [launch]: ./src/launch/
 
 <!-- cargo-rdme end -->

@@ -2,8 +2,8 @@
 
 use crate::{
     parser::{ByteParser, Decoder, Encoder},
+    types::primitives::Generation,
     util::parser_helper::{validate_reserved, ReadExt, WriteExt},
-    Generation,
 };
 use std::{
     convert::TryFrom,

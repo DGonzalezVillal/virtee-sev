@@ -14,7 +14,7 @@ use hex::{self, FromHex};
 use sev::{
     attestation::reference::snp::idblock::{load_priv_key, snp_calculate_id},
     parser::{ByteParser, Decoder},
-    snp::types::{IdAuth, SevEcdsaPubKey, SevEcdsaSig, SnpLaunchDigest},
+    types::snp::{IdAuth, SevEcdsaPubKey, SevEcdsaSig, SnpLaunchDigest},
 };
 
 // Testing that the appropriate id-block and key digests are being generated.

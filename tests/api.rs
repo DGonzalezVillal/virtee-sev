@@ -8,7 +8,7 @@ mod sev {
     use sev::cached_chain;
     use sev::{
         attestation::endorser::sev::sev::Usage,
-        firmware::host::{Build, Firmware, Version},
+        platform::{sev::{Build, Version}, Firmware},
     };
 
     #[cfg(feature = "dangerous_hw_tests")]
@@ -120,7 +120,7 @@ mod sev {
 #[cfg(all(feature = "snp", target_os = "linux"))]
 mod snp {
     use serial_test::serial;
-    use sev::firmware::host::{Config, Firmware, MaskId, SnpPlatformStatus, TcbVersion};
+    use sev::platform::{snp::{Config, MaskId, SnpPlatformStatus, TcbVersion}, Firmware};
 
     #[cfg_attr(not(host), ignore)]
     #[test]

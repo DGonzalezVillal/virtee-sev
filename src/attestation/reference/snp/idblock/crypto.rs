@@ -16,7 +16,7 @@ use std::convert::{TryFrom, TryInto};
 
 use crate::{
     error::IdBlockError,
-    snp::types::{SevEcdsaKeyData, SevEcdsaPubKey, SevEcdsaSig, CURVE_P384, ECDSA_POINT_SIZE_BYTES},
+    types::snp::{SevEcdsaKeyData, SevEcdsaPubKey, SevEcdsaSig, CURVE_P384, ECDSA_POINT_SIZE_BYTES},
 };
 
 const CURVE_P384_NID: Nid = Nid::SECP384R1;

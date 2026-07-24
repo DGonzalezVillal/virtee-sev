@@ -1,11 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
-//! Shared SNP UAPI value types used across attestation, launch, and platform code.
+//! SEV-SNP UAPI value types.
 
 mod cert;
 mod derived_key;
 mod id_block;
-pub mod launch;
 mod launch_digest;
 mod platform_config;
 mod primitives;
@@ -21,3 +20,5 @@ pub use launch_digest::{SnpLaunchDigest, LD_BITS, LD_BYTES};
 pub use platform_config::MaskId;
 pub use primitives::{GuestPolicy, Version};
 pub use tcb::TcbVersion;
+
+pub mod platform;

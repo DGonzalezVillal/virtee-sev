@@ -7,7 +7,7 @@
 
 mod key;
 
-use crate::{error::SessionError, firmware::host::Build};
+use crate::{error::SessionError, platform::sev::Build};
 
 use super::{Header, HeaderFlags, Measurement, Policy, PolicyFlags, Secret, Session as LaunchSession, Start};
 
@@ -286,7 +286,7 @@ impl Session<Verified> {
 #[cfg(test)]
 mod initialized {
     use super::*;
-    use crate::firmware::host::{Build, Version};
+    use crate::platform::sev::{Build, Version};
 
     #[test]
     fn session() {

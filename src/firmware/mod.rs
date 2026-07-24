@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
-//! Modules for interfacing with SEV firmware.
-//! Rust-friendly API wrappers to communicate with the FFI functions.
+//! Linux ioctl definitions for SEV host and guest firmware devices.
+//!
+//! Public host platform APIs live in [`crate::platform`]. Guest attestation
+//! APIs live in [`crate::attestation::attester`].
 
 #[cfg(any(feature = "sev", feature = "snp"))]
-pub mod host;
+pub(crate) mod host;
 
 #[cfg(feature = "snp")]
-pub mod guest;
+pub(crate) mod guest;
 
-#[cfg(any(feature = "sev", feature = "snp"))]
-pub(crate) mod linux;
+pub(crate) const _4K_PAGE: usize = 4096;

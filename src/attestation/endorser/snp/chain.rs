@@ -5,7 +5,7 @@ use openssl::x509::X509;
 
 use super::*;
 
-use crate::firmware::host::{CertTableEntry, CertType};
+use crate::types::snp::{platform::CertTableEntry, CertType};
 
 /// Interfaces for a complete SEV-SNP certificate chain.
 

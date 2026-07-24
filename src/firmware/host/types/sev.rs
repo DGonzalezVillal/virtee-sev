@@ -1,95 +1,93 @@
 // SPDX-License-Identifier: Apache-2.0
 
-//! Operations for managing the SEV platform.
+#[cfg(target_os = "linux")]
+use crate::attestation::endorser::sev::sev;
 
-use crate::firmware::host::State;
-pub use crate::firmware::linux::host::types::PlatformStatusFlags;
-use crate::parser::{Decoder, Encoder};
-use crate::util::{TypeLoad, TypeSave};
+#[cfg(target_os = "linux")]
+use std::marker::PhantomData;
 
-use std::{
-    fmt::Debug,
-    io::{Read, Write},
-};
+/// Generate a new Platform Endorsement Key (PEK).
+///
+/// (Chapter 5.7)
+#[cfg(target_os = "linux")]
+pub struct PekGen;
 
-#[cfg(all(feature = "sev", feature = "openssl"))]
-pub use crate::attestation::evidence::sev::LegacyAttestationReport;
-
-#[cfg(feature = "serde")]
-use serde::{Deserialize, Serialize};
-
-/// Information about the SEV platform version.
-#[repr(C)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Version {
-    /// The major version number.
-    pub major: u8,
-
-    /// The minor version number.
-    pub minor: u8,
+/// Request certificate signing.
+///
+/// (Chapter 5.8; Table 27)
+#[repr(C, packed)]
+#[cfg(target_os = "linux")]
+pub struct PekCsr<'a> {
+    addr: u64,
+    len: u32,
+    _phantom: PhantomData<&'a ()>,
 }
 
-impl std::fmt::Display for Version {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{}.{}", self.major, self.minor)
-    }
-}
-
-impl From<u16> for Version {
-    fn from(v: u16) -> Self {
+#[cfg(target_os = "linux")]
+impl<'a> PekCsr<'a> {
+    pub fn new(cert: &'a mut sev::Certificate) -> Self {
         Self {
-            major: ((v & 0xF0) >> 4) as u8,
-            minor: (v & 0x0F) as u8,
+            addr: cert as *mut _ as _,
+            len: std::mem::size_of_val(cert) as _,
+            _phantom: PhantomData,
         }
     }
 }
 
-/// A description of the SEV platform's build information.
-#[repr(C)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, PartialOrd)]
-pub struct Build {
-    /// The version information.
-    pub version: Version,
-
-    /// The build number.
-    pub build: u8,
+/// Join the platform to the domain.
+///
+/// (Chapter 5.9; Table 29)
+#[cfg(target_os = "linux")]
+#[repr(C, packed)]
+pub struct PekCertImport<'a> {
+    pek_addr: u64,
+    pek_len: u32,
+    oca_addr: u64,
+    oca_len: u32,
+    _phantom: PhantomData<&'a ()>,
 }
 
-impl std::fmt::Display for Build {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{}.{}", self.version, self.build)
+#[cfg(target_os = "linux")]
+impl<'a> PekCertImport<'a> {
+    pub fn new(pek: &'a sev::Certificate, oca: &'a sev::Certificate) -> Self {
+        Self {
+            pek_addr: pek as *const _ as _,
+            pek_len: std::mem::size_of_val(pek) as _,
+            oca_addr: oca as *const _ as _,
+            oca_len: std::mem::size_of_val(oca) as _,
+            _phantom: PhantomData,
+        }
     }
 }
 
-impl Decoder<()> for Build {
-    fn decode(reader: &mut impl Read, _: ()) -> std::io::Result<Self> {
-        reader.load()
-    }
+/// (Re)generate the Platform Diffie-Hellman (PDH).
+///
+/// (Chapter 5.10)
+#[cfg(target_os = "linux")]
+pub struct PdhGen;
+
+/// Retrieve the PDH and the platform certificate chain.
+///
+/// (Chapter 5.11)
+#[cfg(target_os = "linux")]
+#[repr(C, packed)]
+pub struct PdhCertExport<'a> {
+    pdh_addr: u64,
+    pdh_len: u32,
+    certs_addr: u64,
+    certs_len: u32,
+    _phantom: PhantomData<&'a ()>,
 }
 
-impl Encoder<()> for Build {
-    fn encode(&self, writer: &mut impl Write, _: ()) -> std::io::Result<()> {
-        writer.save(self)
+#[cfg(target_os = "linux")]
+impl<'a> PdhCertExport<'a> {
+    pub fn new(pdh: &'a mut sev::Certificate, certs: &'a mut [sev::Certificate; 3]) -> Self {
+        Self {
+            pdh_addr: pdh as *mut _ as _,
+            pdh_len: std::mem::size_of_val(pdh) as _,
+            certs_addr: certs.as_mut_ptr() as _,
+            certs_len: std::mem::size_of_val(certs) as _,
+            _phantom: PhantomData,
+        }
     }
-}
-
-/// Information regarding the SEV platform's current status.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Status {
-    /// The build number.
-    pub build: Build,
-
-    /// The platform's current state.
-    pub state: State,
-
-    /// Additional platform information is encoded into flags.
-    ///
-    /// These could describe whether encrypted state functionality
-    /// is enabled, or whether the platform is self-owned.
-    pub flags: PlatformStatusFlags,
-
-    /// The number of valid guests supervised by this platform.
-    pub guests: u32,
 }

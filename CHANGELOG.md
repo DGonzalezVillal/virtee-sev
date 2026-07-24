@@ -6,11 +6,24 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+- Introduced the `types` module with `types::snp`, `types::sev`, and
+  `types::shared` for firmware ABI value types (replacing `snp::types`).
+- Moved first-generation SEV ABI types (`Version`, `Build`, `State`, `Status`)
+  into `types::sev`.
+- Removed the `platform::types` submodule; platform re-exports ABI types from
+  `types::sev` and `types::snp::platform` via `platform::sev` and
+  `platform::snp`.
+- Split host platform APIs into `platform::sev` (legacy SEV ioctls and types)
+  and `platform::snp` (SNP ioctls and types). `platform::Firmware` remains
+  the shared `/dev/sev` handle at the module root; legacy `platform_status` and
+  `get_identifier` are on that shared handle (require `sev` and/or `snp`).
+- Moved SNP platform types (`Config`, `SnpPlatformStatus`, `CertTableEntry`, …)
+  from `platform::types::snp` into `types::snp::platform`.
 - Introduced the `snp::types` module for portable SNP ABI value types shared
   across attestation and platform code. `TcbVersion` is the first type moved
-  there; `firmware::host::TcbVersion` remains available as a re-export.
+  there; `platform::TcbVersion` remains available as a re-export.
 - Moved `GuestPolicy` and `Version` into `snp::types`.
-- Moved `CertType` and `MaskId` into `snp::types`; `firmware::host`
+- Moved `CertType` and `MaskId` into `snp::types`; `platform`
   re-exports them for compatibility.
 - Moved `DerivedKey` and `GuestFieldSelect` into `snp::types::derived_key`.
 - Introduced the `attestation` module with `attestation::evidence::snp` for
@@ -33,6 +46,8 @@ All notable changes to this project will be documented in this file.
   under `attestation::reference`.
 - Moved guest launch types into `snp::types::launch` (OVMF metadata layouts,
   QEMU vCPU models, OVMF firmware parsing, and SEV-ES VMSA save-area pages).
+- Introduced the `platform` module for host platform management (`/dev/sev`).
+  Low-level Linux ioctl definitions remain internal under `firmware`.
 - Moved legacy SEV certificate chains into `attestation::endorser::sev` and
   verification into `attestation::verifier::sev`. Moved
   `LegacyAttestationReport` into `attestation::evidence::sev`.
@@ -62,6 +77,9 @@ All notable changes to this project will be documented in this file.
   `attestation`.
 - Removed the `certs` module. Legacy SEV endorsement material lives under
   `attestation::endorser::sev`.
+- Moved host platform APIs from `firmware::host` to `platform`. The `firmware`
+  module is now crate-internal ioctl plumbing for host and guest devices.
+  Host ioctl layouts live at `firmware::host` (formerly `firmware::linux::host`).
 - Moved the legacy SEV guest-owner launch session from the crate root into
   `launch::sev::session`.
 - Removed the `firmware::guest::types` shim. Guest attestation device access

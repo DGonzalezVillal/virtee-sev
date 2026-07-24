@@ -8,12 +8,12 @@ use crate::{
     attestation::reference::sev_hashes::SevHashes,
     error::*,
     launch::PageType,
-    snp::types::launch::{
+    types::shared::launch::{
         ovmf::{OVMF, OvmfSevMetadataSectionDesc, SectionType},
         vcpu::CpuType,
         vmsa::{GuestFeatures, VMMType, VMSA},
     },
-    snp::types::SnpLaunchDigest,
+    types::snp::SnpLaunchDigest,
 };
 use hex::FromHex;
 use std::path::PathBuf;

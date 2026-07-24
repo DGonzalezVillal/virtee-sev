@@ -6,7 +6,7 @@ use crate::{
     attestation::reference::digest::sha384,
     error::*,
     launch::PageType,
-    snp::types::{SnpLaunchDigest, LD_BYTES},
+    types::snp::{SnpLaunchDigest, LD_BYTES},
 };
 
 // VMSA page is recorded in the RMP table with GPA (u64)(-1).
