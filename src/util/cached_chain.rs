@@ -16,9 +16,9 @@
 #[cfg(feature = "openssl")]
 use crate::{
     attestation::endorser::sev::{ca::Chain as CaChain, Chain as FullChain},
-    firmware::host::Firmware,
+    platform::Firmware,
     sev::Certificate,
-    Generation,
+    types::primitives::Generation,
 };
 
 #[cfg(feature = "openssl")]

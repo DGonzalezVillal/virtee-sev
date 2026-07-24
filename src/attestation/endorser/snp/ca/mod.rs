@@ -117,6 +117,36 @@ impl Chain {
     }
 }
 
+#[cfg(all(
+    not(feature = "sev"),
+    any(feature = "openssl", feature = "crypto_nossl")
+))]
+impl From<crate::types::primitives::Generation> for Chain {
+    fn from(gen: crate::types::primitives::Generation) -> Self {
+        let (ark, ask) = match gen {
+            crate::types::primitives::Generation::Milan => (
+                super::super::builtin::milan::ark().unwrap(),
+                super::super::builtin::milan::ask().unwrap(),
+            ),
+            crate::types::primitives::Generation::Genoa => (
+                super::super::builtin::genoa::ark().unwrap(),
+                super::super::builtin::genoa::ask().unwrap(),
+            ),
+            crate::types::primitives::Generation::Turin => (
+                super::super::builtin::turin::ark().unwrap(),
+                super::super::builtin::turin::ask().unwrap(),
+            ),
+            crate::types::primitives::Generation::Venice => {
+                panic!("Venice SNP CA chain is not yet implemented")
+            }
+            #[cfg(feature = "sev")]
+            _ => panic!("unsupported generation for SNP CA chain"),
+        };
+
+        Self { ark, ask }
+    }
+}
+
 mod tests {
     #[test]
     fn milan_ca_chain_verifiable() {

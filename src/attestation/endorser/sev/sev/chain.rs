@@ -59,3 +59,31 @@ impl Encoder<()> for Chain {
         self.cek.encode(&mut writer, ())
     }
 }
+
+impl TryFrom<&Chain> for crate::types::primitives::Generation {
+    type Error = ();
+
+    fn try_from(schain: &Chain) -> std::result::Result<Self, Self::Error> {
+        use crate::attestation::verifier::Verifiable;
+
+        let naples: super::super::ca::Chain = crate::types::primitives::Generation::Naples.into();
+        let rome: super::super::ca::Chain = crate::types::primitives::Generation::Rome.into();
+        let milan: super::super::ca::Chain = crate::types::primitives::Generation::Milan.into();
+        let genoa: super::super::ca::Chain = crate::types::primitives::Generation::Genoa.into();
+        let turin: super::super::ca::Chain = crate::types::primitives::Generation::Turin.into();
+
+        Ok(if (&naples.ask, &schain.cek).verify().is_ok() {
+            crate::types::primitives::Generation::Naples
+        } else if (&rome.ask, &schain.cek).verify().is_ok() {
+            crate::types::primitives::Generation::Rome
+        } else if (&milan.ask, &schain.cek).verify().is_ok() {
+            crate::types::primitives::Generation::Milan
+        } else if (&genoa.ask, &schain.cek).verify().is_ok() {
+            crate::types::primitives::Generation::Genoa
+        } else if (&turin.ask, &schain.cek).verify().is_ok() {
+            crate::types::primitives::Generation::Turin
+        } else {
+            return Err(());
+        })
+    }
+}
