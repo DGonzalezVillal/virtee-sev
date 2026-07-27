@@ -31,10 +31,12 @@ This crate implements APIs for both SEV and SEV-SNP management.
 ## SEV and SEV-SNP enablement
 
 By default, only the SEV-SNP library is compiled. First-generation SEV
-(pre-SNP) support — including platform APIs, certificate and attestation
-report verification, launch, and session — is available via the `sev`
-feature flag. That stack is separate from SEV-SNP and is not needed for
-SNP-only consumers such as remote attestation verifiers.
+(pre-SNP) support — certificate and attestation report verification,
+reference values, and session types — is available via the `sev` feature
+flag. Host platform management (`/dev/sev`) requires the `platform` feature;
+KVM guest launch requires `launch` (which enables `platform`). That legacy
+stack is separate from SEV-SNP and is not needed for SNP-only consumers such
+as remote attestation verifiers.
 Because many modules provide support to both legacy SEV and SEV-SNP, they have
 been split into individual sub-modules `sev.rs` and `snp.rs`, isolating
 generation specific behavior.
@@ -47,15 +49,17 @@ To use SEV-SNP with the defaults (or explicitly):
 
 ## SNP attestation
 
-For SEV-SNP remote attestation, use the [`attestation`](https://docs.rs/sev/latest/sev/attestation/) module. It is organized around [IETF RATS](https://datatracker.ietf.org/doc/rfc9334/) roles:
+For SEV-SNP remote attestation, use the [`attestation`](https://docs.rs/sev/latest/sev/attestation/) module. It is organized around [IETF RATS](https://datatracker.ietf.org/doc/rfc9334/) roles. Enable the role features you need:
 
-| Module | Role |
-|---|---|
-| `attestation::evidence::snp` | Evidence framing and parsing (`Report`, `ReportBody`, …) |
-| `attestation::verifier` | Signature and chain verification |
-| `attestation::endorser` | Endorsement material (VCEK/VLEK chains) |
-| `attestation::attester` | Guest evidence collection (`/dev/sev-guest`) |
-| `attestation::reference` | Reference values (launch digest, ID block) |
+| Feature | Module | Role |
+|---|---|---|
+| `evidence` | `attestation::evidence::snp` | Evidence framing and parsing |
+| `verifier` | `attestation::verifier` | Signature and chain verification |
+| `endorser` | `attestation::endorser` | Endorsement material (VCEK/VLEK chains) |
+| `attester` | `attestation::attester` | Guest evidence collection (`/dev/sev-guest`) |
+| `reference` | `attestation::reference` | Reference values (launch digest, ID block) |
+
+Defaults include `evidence`, `verifier`, `endorser`, and `reference` but not `attester` or `platform`.
 
 Shared firmware ABI wire types live in [`types`](https://docs.rs/sev/latest/sev/types/), organized as `types::snp`, `types::sev`, and `types::shared` (OVMF, vCPU models, VMSA pages).
 
@@ -72,29 +76,23 @@ For first-generation SEV (`feature = "sev"`), the same [`attestation`](https://d
 
 ## Platform Management
 
-[`platform::Firmware`](https://docs.rs/sev/latest/sev/platform/struct.Firmware.html) is the shared `/dev/sev` handle. Generation-specific APIs and types live in [`platform::sev`](https://docs.rs/sev/latest/sev/platform/sev/index.html) (legacy SEV) and [`platform::snp`](https://docs.rs/sev/latest/sev/platform/snp/index.html) (SEV-SNP). ABI wire types are under [`types`](https://docs.rs/sev/latest/sev/types/).
+Enable the `platform` feature for host `/dev/sev` management. [`platform::Firmware`](https://docs.rs/sev/latest/sev/platform/struct.Firmware.html) is the shared device handle. Generation-specific APIs and types live in [`platform::sev`](https://docs.rs/sev/latest/sev/platform/sev/index.html) (legacy SEV) and [`platform::snp`](https://docs.rs/sev/latest/sev/platform/snp/index.html) (SEV-SNP). ABI wire types are under [`types`](https://docs.rs/sev/latest/sev/types/).
 
 ## Guest Management
 
+Enable the `launch` feature for KVM guest bring-up (`launch` implies `platform`).
 Refer to the [launch](https://docs.rs/sev/latest/sev/launch/) module for more information.
 
 ## Cryptographic Verification
 
-Neither `openssl` nor `crypto_nossl` is enabled by default. Enable one of them
-explicitly for certificate chain and attestation report verification;
-`attestation::verifier` and `attestation::endorser` are gated on either feature.
-
-With `openssl`, verification uses OpenSSL. The crate defaults include
-`openssl?/vendored`, so when the `openssl` feature is enabled, the vendored
-OpenSSL build is used automatically.
-
-With `crypto_nossl`, pure-Rust crates (`p384`, `rsa`, etc.) handle verification
-instead. `openssl` and `crypto_nossl` are mutually exclusive.
+`verifier`, `endorser`, and `reference` require a crypto backend: enable
+`crypto-openssl` or `crypto-rust` (mutually exclusive). Defaults use
+`crypto-openssl` with vendored OpenSSL.
 
 Examples:
 
-`sev = { version = "1.2.1", features = ["snp", "openssl"] }`  
-`sev = { version = "1.2.1", features = ["snp", "crypto_nossl"] }`
+`sev = { version = "1.2.1", default-features = false, features = ["snp", "verifier", "crypto-openssl"] }`  
+`sev = { version = "1.2.1", default-features = false, features = ["snp", "verifier", "crypto-rust"] }`
 
 ## Remarks
 
@@ -108,11 +106,11 @@ with the device nodes.
 ## Using the C API
 
 Projects in C can take advantage of the C API for the SEV [launch] ioctls.
-To install the C API, users can use `cargo-c` with the features they would
+Enable the `launch` feature and use `cargo-c` with the features you would
 like to produce and install a `pkg-config` file, a static library, a dynamic
 library, and a C header:
 
-`cargo cinstall --prefix=/usr --libdir=/usr/lib64`
+`cargo cinstall --prefix=/usr --libdir=/usr/lib64 --features launch`
 
 [platform]: ./src/platform/
 [launch]: ./src/launch/
