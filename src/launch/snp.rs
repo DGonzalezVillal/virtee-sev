@@ -18,7 +18,7 @@ use bitflags::bitflags;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-pub use crate::launch::PageType;
+pub use crate::types::snp::PageType;
 
 /// Launcher type-state that indicates a brand new launch.
 pub struct New;

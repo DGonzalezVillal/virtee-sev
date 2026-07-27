@@ -5,7 +5,7 @@ use std::convert::TryInto;
 use crate::{
     attestation::reference::digest::sha384,
     error::*,
-    launch::PageType,
+    types::snp::PageType,
     types::snp::{SnpLaunchDigest, LD_BYTES},
 };
 

@@ -7,13 +7,12 @@ pub mod gctx;
 use crate::{
     attestation::reference::sev_hashes::SevHashes,
     error::*,
-    launch::PageType,
     types::shared::launch::{
         ovmf::{OVMF, OvmfSevMetadataSectionDesc, SectionType},
         vcpu::CpuType,
         vmsa::{GuestFeatures, VMMType, VMSA},
     },
-    types::snp::SnpLaunchDigest,
+    types::snp::{PageType, SnpLaunchDigest},
 };
 use hex::FromHex;
 use std::path::PathBuf;
