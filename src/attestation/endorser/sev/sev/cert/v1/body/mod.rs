@@ -19,7 +19,7 @@ pub struct Body {
     pub data: Data,
 }
 
-#[cfg(feature = "openssl")]
+#[cfg(feature = "crypto-openssl")]
 impl Body {
     pub fn generate(usage: Usage) -> Result<(Body, PrivateKey<Usage>)> {
         let (key, prv) = key::PubKey::generate(usage)?;

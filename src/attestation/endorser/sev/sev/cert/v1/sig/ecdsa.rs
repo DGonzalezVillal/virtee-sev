@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-#[cfg(feature = "openssl")]
+#[cfg(feature = "crypto-openssl")]
 use {super::*, openssl::ecdsa};
 
 use crate::util::hexline::HexLine;
@@ -68,7 +68,7 @@ Signature:
     }
 }
 
-#[cfg(feature = "openssl")]
+#[cfg(feature = "crypto-openssl")]
 impl From<ecdsa::EcdsaSig> for Signature {
     #[inline]
     fn from(value: ecdsa::EcdsaSig) -> Self {
@@ -80,7 +80,7 @@ impl From<ecdsa::EcdsaSig> for Signature {
     }
 }
 
-#[cfg(feature = "openssl")]
+#[cfg(feature = "crypto-openssl")]
 impl TryFrom<&[u8]> for Signature {
     type Error = Error;
 
@@ -90,7 +90,7 @@ impl TryFrom<&[u8]> for Signature {
     }
 }
 
-#[cfg(feature = "openssl")]
+#[cfg(feature = "crypto-openssl")]
 impl TryFrom<Signature> for ecdsa::EcdsaSig {
     type Error = Error;
 
@@ -102,7 +102,7 @@ impl TryFrom<Signature> for ecdsa::EcdsaSig {
     }
 }
 
-#[cfg(feature = "openssl")]
+#[cfg(feature = "crypto-openssl")]
 impl TryFrom<&Signature> for ecdsa::EcdsaSig {
     type Error = Error;
 
@@ -114,7 +114,7 @@ impl TryFrom<&Signature> for ecdsa::EcdsaSig {
     }
 }
 
-#[cfg(feature = "openssl")]
+#[cfg(feature = "crypto-openssl")]
 impl TryFrom<&Signature> for Vec<u8> {
     type Error = Error;
 

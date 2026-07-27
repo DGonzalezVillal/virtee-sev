@@ -6,7 +6,7 @@ mod naples;
 #[cfg(feature = "sev")]
 mod rome;
 
-#[cfg(all(feature = "openssl", feature = "sev"))]
+#[cfg(all(feature = "crypto-openssl", feature = "sev"))]
 mod sev {
     use super::*;
 
@@ -23,7 +23,7 @@ mod sev {
     }
 }
 
-#[cfg(all(feature = "snp", any(feature = "openssl", feature = "crypto_nossl")))]
+#[cfg(all(feature = "snp", any(feature = "crypto-openssl", feature = "crypto-rust")))]
 mod snp {
 
     use std::convert::TryFrom;
@@ -33,15 +33,15 @@ mod snp {
 
     const TEST_MILAN_VCEK_DER: &[u8] = include_bytes!("certs_data/vcek_milan.der");
 
-    #[cfg(feature = "openssl")]
+    #[cfg(feature = "crypto-openssl")]
     const TEST_TURIN_VCEK_DER: &[u8] = include_bytes!("certs_data/vcek_turin.der");
 
     const TEST_MILAN_ATTESTATION_REPORT: &[u8] = include_bytes!("certs_data/report_milan.hex");
 
-    #[cfg(feature = "openssl")]
+    #[cfg(feature = "crypto-openssl")]
     const TEST_MILAN_CA: &[u8] = include_bytes!("certs_data/cert_chain_milan");
 
-    #[cfg(feature = "openssl")]
+    #[cfg(feature = "crypto-openssl")]
     const TEST_TURIN_CA: &[u8] = include_bytes!("certs_data/cert_chain_turin");
 
     #[test]
@@ -117,7 +117,7 @@ mod snp {
         assert!(ReportBody::try_from((&report, &chain)).is_err());
     }
 
-    #[cfg(feature = "openssl")]
+    #[cfg(feature = "crypto-openssl")]
     #[test]
     fn milan_ca_stack() {
         let vcek = Certificate::from_der(TEST_MILAN_VCEK_DER).unwrap();
@@ -132,7 +132,7 @@ mod snp {
         assert_eq!(chain.verify().ok(), Some(&vcek));
     }
 
-    #[cfg(feature = "openssl")]
+    #[cfg(feature = "crypto-openssl")]
     #[test]
     fn turin_ca_stack() {
         let vcek = Certificate::from_der(TEST_TURIN_VCEK_DER).unwrap();

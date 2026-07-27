@@ -9,16 +9,16 @@ mod chain;
 #[allow(clippy::module_inception)]
 pub mod sev;
 
-#[cfg(feature = "openssl")]
+#[cfg(feature = "crypto-openssl")]
 mod util;
 
-#[cfg(feature = "openssl")]
+#[cfg(feature = "crypto-openssl")]
 mod crypto;
 
 pub use chain::Chain;
 
 use crate::util::*;
-#[cfg(feature = "openssl")]
+#[cfg(feature = "crypto-openssl")]
 use util::*;
 
 use crate::parser::{Decoder, Encoder};
@@ -28,14 +28,14 @@ use std::{
     io::{Error, ErrorKind, Read, Result, Write},
 };
 
-#[cfg(feature = "openssl")]
+#[cfg(feature = "crypto-openssl")]
 use openssl::*;
 
 /// OpenSSL body
-#[cfg(feature = "openssl")]
+#[cfg(feature = "crypto-openssl")]
 pub(crate) struct Body;
 
-#[cfg(feature = "openssl")]
+#[cfg(feature = "crypto-openssl")]
 /// An interface for types that can sign another type (i.e., a certificate).
 pub trait Signer<T> {
     /// The now-signed type.
@@ -46,7 +46,7 @@ pub trait Signer<T> {
 }
 
 /// OpenSSL related signature
-#[cfg(feature = "openssl")]
+#[cfg(feature = "crypto-openssl")]
 pub(crate) struct Signature {
     id: Option<[u8; 16]>,
     sig: Vec<u8>,
@@ -55,7 +55,7 @@ pub(crate) struct Signature {
     usage: Usage,
 }
 
-#[cfg(feature = "openssl")]
+#[cfg(feature = "crypto-openssl")]
 /// Represents a private key.
 pub struct PrivateKey<U> {
     id: Option<[u8; 16]>,
@@ -65,7 +65,7 @@ pub struct PrivateKey<U> {
 }
 
 /// Represents a public key.
-#[cfg(feature = "openssl")]
+#[cfg(feature = "crypto-openssl")]
 pub(crate) struct PublicKey<U> {
     id: Option<[u8; 16]>,
     key: pkey::PKey<pkey::Public>,
@@ -73,7 +73,7 @@ pub(crate) struct PublicKey<U> {
     usage: U,
 }
 
-#[cfg(all(feature = "sev", feature = "openssl"))]
+#[cfg(all(feature = "sev", feature = "crypto-openssl"))]
 impl<U> PublicKey<U> {
     /// Obtains the OpenSSL EcKey<Public> within.
     pub fn ec_key(

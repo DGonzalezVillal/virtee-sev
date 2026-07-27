@@ -15,7 +15,7 @@ pub struct Certificate {
     pub sigs: [sig::Signature; 2],
 }
 
-#[cfg(feature = "openssl")]
+#[cfg(feature = "crypto-openssl")]
 impl Certificate {
     pub fn generate(usage: Usage) -> Result<(Self, PrivateKey<Usage>)> {
         let (body, prv) = body::Body::generate(usage)?;
@@ -41,7 +41,7 @@ impl Decoder<()> for Certificate {
     }
 }
 
-#[cfg(feature = "openssl")]
+#[cfg(feature = "crypto-openssl")]
 impl Signer<Certificate> for PrivateKey<Usage> {
     type Output = ();
 

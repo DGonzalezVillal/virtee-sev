@@ -4,10 +4,10 @@
 
 mod verifiable;
 
-#[cfg(all(feature = "snp", any(feature = "openssl", feature = "crypto_nossl")))]
+#[cfg(all(feature = "snp", any(feature = "crypto-openssl", feature = "crypto-rust")))]
 pub mod snp;
 
-#[cfg(all(feature = "sev", feature = "openssl"))]
+#[cfg(all(feature = "sev", feature = "crypto-openssl"))]
 pub mod sev;
 
 pub use verifiable::Verifiable;

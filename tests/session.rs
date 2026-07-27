@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
-#![cfg(feature = "openssl")]
+#![cfg(feature = "crypto-openssl")]
 
-#[cfg(all(target_os = "linux", feature = "sev"))]
+#[cfg(all(target_os = "linux", feature = "sev", feature = "launch", feature = "verifier"))]
 mod initialized {
     use ::sev::{
         attestation::endorser::sev::builtin::naples::*, attestation::endorser::sev::*, attestation::verifier::Verifiable, launch, launch::sev::session::Session, parser::Decoder,

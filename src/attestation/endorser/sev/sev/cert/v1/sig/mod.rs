@@ -77,7 +77,7 @@ impl PartialEq for Signature {
     }
 }
 
-#[cfg(feature = "openssl")]
+#[cfg(feature = "crypto-openssl")]
 impl TryFrom<crate::attestation::endorser::sev::Signature> for Signature {
     type Error = Error;
 
@@ -118,7 +118,7 @@ impl TryFrom<crate::attestation::endorser::sev::Signature> for Signature {
     }
 }
 
-#[cfg(feature = "openssl")]
+#[cfg(feature = "crypto-openssl")]
 impl TryFrom<&Signature> for Option<crate::attestation::endorser::sev::Signature> {
     type Error = Error;
 
@@ -147,7 +147,7 @@ impl TryFrom<&Signature> for Option<crate::attestation::endorser::sev::Signature
 }
 
 impl Signature {
-    #[cfg(feature = "openssl")]
+    #[cfg(feature = "crypto-openssl")]
     pub fn is_empty(&self) -> bool {
         match self.usage {
             Usage::OCA | Usage::CEK | Usage::PEK | Usage::PDH | Usage::ARK | Usage::ASK => {

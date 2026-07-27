@@ -17,7 +17,7 @@ fn encode() {
     assert_eq!(CEK.to_vec(), output);
 }
 
-#[cfg(feature = "openssl")]
+#[cfg(feature = "crypto-openssl")]
 #[test]
 fn verify() {
     use ::sev::attestation::endorser::sev::builtin::naples::ASK;

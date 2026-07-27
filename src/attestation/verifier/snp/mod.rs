@@ -7,10 +7,10 @@ mod ecdsa;
 mod report;
 mod signature;
 
-#[cfg(feature = "openssl")]
+#[cfg(feature = "crypto-openssl")]
 mod cert;
-#[cfg(feature = "openssl")]
+#[cfg(feature = "crypto-openssl")]
 mod openssl;
 
-#[cfg(feature = "crypto_nossl")]
+#[cfg(feature = "crypto-rust")]
 mod cert_nossl;

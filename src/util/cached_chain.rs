@@ -13,7 +13,7 @@
 
 #![cfg(all(feature = "sev", feature = "dangerous_hw_tests", feature = "platform"))]
 
-#[cfg(feature = "openssl")]
+#[cfg(feature = "crypto-openssl")]
 use crate::{
     attestation::endorser::sev::{ca::Chain as CaChain, Chain as FullChain},
     platform::Firmware,
@@ -21,7 +21,7 @@ use crate::{
     types::primitives::Generation,
 };
 
-#[cfg(feature = "openssl")]
+#[cfg(feature = "crypto-openssl")]
 use reqwest::{
     blocking::{get, Response},
     StatusCode,
@@ -32,10 +32,10 @@ use std::{
     path::{Path, PathBuf},
 };
 
-#[cfg(feature = "openssl")]
+#[cfg(feature = "crypto-openssl")]
 use std::io::Cursor;
 
-#[cfg(feature = "openssl")]
+#[cfg(feature = "crypto-openssl")]
 use crate::parser::Decoder;
 
 fn append_rest<P: AsRef<Path>>(path: P) -> PathBuf {
@@ -89,7 +89,7 @@ pub fn rm_cached_chain() {
 }
 
 /// Request CEK certificate from AMD KDS and generate a full chain.
-#[cfg(all(feature = "sev", feature = "openssl"))]
+#[cfg(all(feature = "sev", feature = "crypto-openssl"))]
 pub fn get_chain() -> FullChain {
     use std::convert::TryFrom;
 

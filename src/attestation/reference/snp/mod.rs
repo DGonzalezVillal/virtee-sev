@@ -2,7 +2,7 @@
 
 //! SNP launch digest and ID block reference value calculation.
 
-#[cfg(feature = "openssl")]
+#[cfg(feature = "crypto-openssl")]
 pub mod idblock;
 
 pub mod measurement;

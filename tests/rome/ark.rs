@@ -25,7 +25,7 @@ fn encode() {
     assert_eq!(ARK.to_vec(), output);
 }
 
-#[cfg(feature = "openssl")]
+#[cfg(feature = "crypto-openssl")]
 #[test]
 fn verify() {
     let ark = ca::Certificate::decode(&mut &ARK[..], ()).unwrap();

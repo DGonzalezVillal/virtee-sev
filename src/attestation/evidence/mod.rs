@@ -5,5 +5,5 @@
 #[cfg(feature = "snp")]
 pub mod snp;
 
-#[cfg(all(feature = "sev", feature = "openssl"))]
+#[cfg(all(feature = "sev", feature = "crypto-openssl"))]
 pub mod sev;

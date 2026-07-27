@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-#[cfg(feature = "openssl")]
+#[cfg(feature = "crypto-openssl")]
 use openssl::x509::X509;
 
 use super::*;
@@ -27,7 +27,7 @@ enum ChainEncodingFormat {
     Pem,
 }
 
-#[cfg(feature = "openssl")]
+#[cfg(feature = "crypto-openssl")]
 impl From<(X509, X509, X509)> for Chain {
     /// Will presume the provided data is formated as (ASK,ARK,VCEK) or (ASVK,ARK,VLEK).
     fn from(value: (X509, X509, X509)) -> Self {
@@ -41,7 +41,7 @@ impl From<(X509, X509, X509)> for Chain {
     }
 }
 
-#[cfg(feature = "openssl")]
+#[cfg(feature = "crypto-openssl")]
 impl<'a: 'b, 'b> From<&'a Chain> for (&'b X509, &'b X509, &'b X509) {
     /// Will presume the provided data is formated as (ASK,ARK,VCEK) or (ASVK,ARK,VLEK).
     fn from(value: &'a Chain) -> Self {
@@ -53,7 +53,7 @@ impl<'a: 'b, 'b> From<&'a Chain> for (&'b X509, &'b X509, &'b X509) {
     }
 }
 
-#[cfg(feature = "openssl")]
+#[cfg(feature = "crypto-openssl")]
 impl From<(&X509, &X509, &X509)> for Chain {
     fn from(value: (&X509, &X509, &X509)) -> Self {
         (value.0.clone(), value.1.clone(), value.2.clone()).into()

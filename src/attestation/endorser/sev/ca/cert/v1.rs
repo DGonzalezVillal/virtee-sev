@@ -2,7 +2,7 @@
 
 use super::*;
 
-#[cfg(feature = "openssl")]
+#[cfg(feature = "crypto-openssl")]
 use openssl::hash;
 
 const NAPLES_ARK_SIG: &[u8] = include_bytes!("../../../../../../tests/naples/ark.cert.sig");
@@ -23,7 +23,7 @@ enum Size {
     Large,
 }
 
-#[cfg(feature = "openssl")]
+#[cfg(feature = "crypto-openssl")]
 impl From<Size> for hash::MessageDigest {
     fn from(size: Size) -> Self {
         match size {
@@ -213,7 +213,7 @@ impl Encoder<()> for Certificate {
     }
 }
 
-#[cfg(feature = "openssl")]
+#[cfg(feature = "crypto-openssl")]
 impl Encoder<super::Body> for Certificate {
     fn encode(&self, writer: &mut impl Write, _: super::Body) -> Result<()> {
         match unsafe { self.preamble.size()? } {
@@ -223,7 +223,7 @@ impl Encoder<super::Body> for Certificate {
     }
 }
 
-#[cfg(feature = "openssl")]
+#[cfg(feature = "crypto-openssl")]
 impl TryFrom<Certificate> for Signature {
     type Error = Error;
 
@@ -245,7 +245,7 @@ impl TryFrom<Certificate> for Signature {
     }
 }
 
-#[cfg(feature = "openssl")]
+#[cfg(feature = "crypto-openssl")]
 impl TryFrom<Certificate> for PublicKey<Usage> {
     type Error = Error;
 

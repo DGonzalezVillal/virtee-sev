@@ -2,8 +2,8 @@
 
 //! RATS Attester role: produce SNP attestation evidence from a guest VM.
 
-#[cfg(target_os = "linux")]
+#[cfg(all(target_os = "linux", feature = "snp"))]
 pub mod snp;
 
-#[cfg(target_os = "linux")]
+#[cfg(all(target_os = "linux", feature = "snp"))]
 pub use snp::Firmware;

@@ -2,7 +2,7 @@
 
 //! SNP ID block and AUTH block reference value calculation.
 
-#[cfg(feature = "openssl")]
+#[cfg(feature = "crypto-openssl")]
 mod crypto;
 
 use openssl::{ec::EcKey, nid::Nid, pkey::Private, sha::sha384};

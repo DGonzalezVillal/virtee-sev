@@ -2,7 +2,7 @@
 
 use super::*;
 
-#[cfg(feature = "openssl")]
+#[cfg(feature = "crypto-openssl")]
 use openssl::rsa;
 
 #[repr(C)]
@@ -45,7 +45,7 @@ impl PartialEq for PubKey {
     }
 }
 
-#[cfg(feature = "openssl")]
+#[cfg(feature = "crypto-openssl")]
 impl TryFrom<&PubKey> for rsa::Rsa<pkey::Public> {
     type Error = Error;
 
@@ -58,7 +58,7 @@ impl TryFrom<&PubKey> for rsa::Rsa<pkey::Public> {
     }
 }
 
-#[cfg(feature = "openssl")]
+#[cfg(feature = "crypto-openssl")]
 impl TryFrom<&PubKey> for pkey::PKey<pkey::Public> {
     type Error = Error;
 
@@ -67,7 +67,7 @@ impl TryFrom<&PubKey> for pkey::PKey<pkey::Public> {
     }
 }
 
-#[cfg(feature = "openssl")]
+#[cfg(feature = "crypto-openssl")]
 impl PubKey {
     pub fn generate(bits: u32) -> Result<(Self, rsa::Rsa<pkey::Private>)> {
         let prv = rsa::Rsa::generate(bits)?;

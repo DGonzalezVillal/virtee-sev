@@ -11,6 +11,13 @@ All notable changes to this project will be documented in this file.
 - Added `platform` and `launch` Cargo features. `platform` gates host `/dev/sev`
   management; `launch` gates KVM guest bring-up and depends on `platform`.
   Neither is enabled by default.
+- Added RATS role features: `evidence`, `reference`, `verifier`, `endorser`,
+  and `attester`. Defaults include all roles except `attester` (guest-side
+  `/dev/sev-guest` collection). The `attestation` module is compiled only when
+  at least one role feature is enabled.
+- Added `crypto-openssl` and `crypto-rust` crypto backend features.
+  `verifier`, `endorser`, and `reference` require one of them. `verifier`
+  implies `endorser` (certificate types used during verification).
 - Introduced the `types` module with `types::snp`, `types::sev`, and
   `types::shared` for firmware ABI value types (replacing `snp::types`).
 - Moved first-generation SEV ABI types (`Version`, `Build`, `State`, `Status`)
@@ -61,6 +68,11 @@ All notable changes to this project will be documented in this file.
 
 - Host platform APIs and guest launch are no longer compiled by default; enable
   `platform` or `launch` explicitly when needed.
+- Default features are now `snp`, `evidence`, `verifier`, `endorser`,
+  `reference`, and `crypto-openssl`.
+- Removed `openssl` and `crypto_nossl` feature aliases; use `crypto-openssl`
+  and `crypto-rust` instead.
+- Guest firmware ioctls (`firmware::guest`) compile only with `attester`.
 - Moved `PlatformInfo` and `KeyInfo` to `attestation::evidence::snp::fields`.
   These are grouped report-body parsing views, not standalone SNP ABI types.
 - Grouped `Version` and `GuestPolicy` under `snp::types::primitives` and `MaskId`

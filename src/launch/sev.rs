@@ -11,7 +11,7 @@ use crate::{
     util::{TypeLoad, TypeSave},
 };
 
-#[cfg(feature = "openssl")]
+#[cfg(feature = "crypto-openssl")]
 pub mod session;
 
 #[cfg(target_os = "linux")]

@@ -31,12 +31,12 @@
 //! ## SEV and SEV-SNP enablement
 //!
 //! By default, only the SEV-SNP library is compiled. First-generation SEV
-//! (pre-SNP) support — including platform APIs, certificate and attestation
-//! report verification, launch, and session — is available via the `sev`
-//! feature flag. Host platform management (`/dev/sev`) requires the `platform`
-//! feature; KVM guest launch requires `launch` (which enables `platform`).
-//! That legacy stack is separate from SEV-SNP and is not needed for SNP-only
-//! consumers such as remote attestation verifiers.
+//! (pre-SNP) support — certificate and attestation report verification,
+//! reference values, and session types — is available via the `sev` feature
+//! flag. Host platform management (`/dev/sev`) requires the `platform` feature;
+//! KVM guest launch requires `launch` (which enables `platform`). That legacy
+//! stack is separate from SEV-SNP and is not needed for SNP-only consumers such
+//! as remote attestation verifiers.
 //! Because many modules provide support to both legacy SEV and SEV-SNP, they
 //! have been split into individual sub-modules `sev.rs` and `snp.rs`, isolating
 //! generation specific behavior.
@@ -65,15 +65,19 @@
 //! ## SNP attestation
 //!
 //! For SEV-SNP remote attestation, use the [`attestation`] module. It is
-//! organized around [IETF RATS](https://datatracker.ietf.org/doc/rfc9334/) roles:
+//! organized around [IETF RATS](https://datatracker.ietf.org/doc/rfc9334/) roles.
+//! Enable the role features you need:
 //!
-//! | Module | Role |
-//! |---|---|
-//! | [`attestation::evidence::snp`] | Evidence framing and parsing (`Report`, `ReportBody`, …) |
-//! | [`attestation::verifier`] | Signature and chain verification |
-//! | [`attestation::endorser`] | Endorsement material (VCEK/VLEK chains) |
-//! | [`attestation::attester`] | Guest evidence collection (`/dev/sev-guest`) |
-//! | [`attestation::reference`] | Reference values (launch digest, ID block) |
+//! | Feature | Module | Role |
+//! |---|---|---|
+//! | `evidence` | [`attestation::evidence::snp`] | Evidence framing and parsing |
+//! | `verifier` | [`attestation::verifier`] | Signature and chain verification |
+//! | `endorser` | [`attestation::endorser`] | Endorsement material (VCEK/VLEK chains) |
+//! | `attester` | [`attestation::attester`] | Guest evidence collection (`/dev/sev-guest`) |
+//! | `reference` | [`attestation::reference`] | Reference values (launch digest, ID block) |
+//!
+//! Defaults include `evidence`, `verifier`, `endorser`, and `reference` but not
+//! `attester` (guest-side collection) or `platform` (host `/dev/sev`).
 //!
 //! Shared firmware ABI wire types live in [`types`], organized by generation:
 //! [`types::snp`] for SEV-SNP, [`types::sev`] for first-generation SEV, and
@@ -111,22 +115,14 @@
 //!
 //! ## Cryptographic Verification
 //!
-//! Neither `openssl` nor `crypto_nossl` is enabled by default. Enable one of
-//! them explicitly for certificate chain and attestation report verification;
-//! [`attestation::verifier`] and [`attestation::endorser`] are gated on either
-//! feature.
-//!
-//! With `openssl`, verification uses OpenSSL. The crate defaults include
-//! `openssl?/vendored`, so when the `openssl` feature is enabled, the vendored
-//! OpenSSL build is used automatically.
-//!
-//! With `crypto_nossl`, pure-Rust crates (`p384`, `rsa`, etc.) handle
-//! verification instead. `openssl` and `crypto_nossl` are mutually exclusive.
+//! `verifier`, `endorser`, and `reference` require a crypto backend: enable
+//! `crypto-openssl` or `crypto-rust` (mutually exclusive). Defaults use
+//! `crypto-openssl` with vendored OpenSSL.
 //!
 //! Examples:
 //!
-//! `sev = { version = "1.2.1", features = ["snp", "openssl"] }`  
-//! `sev = { version = "1.2.1", features = ["snp", "crypto_nossl"] }`
+//! `sev = { version = "1.2.1", default-features = false, features = ["snp", "verifier", "crypto-openssl"] }`  
+//! `sev = { version = "1.2.1", default-features = false, features = ["snp", "verifier", "crypto-rust"] }`
 //!
 //! ## Remarks
 //!
@@ -152,19 +148,37 @@
 #![allow(clippy::identity_op)]
 #![allow(clippy::unreadable_literal)]
 
-#[cfg(all(feature = "openssl", feature = "crypto_nossl"))]
+#[cfg(all(feature = "crypto-openssl", feature = "crypto-rust"))]
 compile_error!(
-    "feature \"openssl\" and feature \"crypto_nossl\" cannot be enabled at the same time"
+    "features \"crypto-openssl\" and \"crypto-rust\" cannot be enabled at the same time"
+);
+
+#[cfg(all(
+    any(feature = "verifier", feature = "endorser", feature = "reference"),
+    not(any(feature = "crypto-openssl", feature = "crypto-rust"))
+))]
+compile_error!(
+    "features \"verifier\", \"endorser\", and \"reference\" require \"crypto-openssl\" or \"crypto-rust\""
 );
 
 #[cfg(any(feature = "sev", feature = "snp"))]
 pub mod types;
 
-#[cfg(any(feature = "sev", feature = "snp"))]
+#[cfg(all(
+    any(feature = "sev", feature = "snp"),
+    any(
+        feature = "evidence",
+        feature = "reference",
+        feature = "verifier",
+        feature = "endorser",
+        feature = "attester"
+    )
+))]
 pub mod attestation;
 
 #[cfg(feature = "platform")]
 pub mod platform;
+
 #[cfg(any(feature = "sev", feature = "snp"))]
 pub(crate) mod firmware;
 

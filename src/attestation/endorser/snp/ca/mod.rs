@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Operations for a Certificate Authority (CA) chain.
 
-#[cfg(feature = "openssl")]
+#[cfg(feature = "crypto-openssl")]
 use openssl::x509::X509;
 
 use super::*;
@@ -16,7 +16,7 @@ pub struct Chain {
     pub ask: Certificate,
 }
 
-#[cfg(feature = "openssl")]
+#[cfg(feature = "crypto-openssl")]
 impl From<(X509, X509)> for Chain {
     /// Assumes the structure of ASK/ARK or ASVK/ARK
     fn from(value: (X509, X509)) -> Self {
@@ -27,7 +27,7 @@ impl From<(X509, X509)> for Chain {
     }
 }
 
-#[cfg(feature = "openssl")]
+#[cfg(feature = "crypto-openssl")]
 impl From<(&X509, &X509)> for Chain {
     /// Assumes the structure of &ASK/&ARK or &ASVK/&ARK
     fn from(value: (&X509, &X509)) -> Self {
@@ -35,7 +35,7 @@ impl From<(&X509, &X509)> for Chain {
     }
 }
 
-#[cfg(feature = "openssl")]
+#[cfg(feature = "crypto-openssl")]
 impl<'a: 'b, 'b> From<&'a Chain> for (&'b X509, &'b X509) {
     /// Will always assume the tuple type to be (&ASK, &ARK) or (&ASVK, &ARK).
     fn from(value: &'a Chain) -> Self {
@@ -43,7 +43,7 @@ impl<'a: 'b, 'b> From<&'a Chain> for (&'b X509, &'b X509) {
     }
 }
 
-#[cfg(feature = "openssl")]
+#[cfg(feature = "crypto-openssl")]
 impl From<&[X509]> for Chain {
     /// Will only retrieve the first two certificates, ignoring the rest. Also
     /// assumes the structure to be (&ASK, &ARK) or (&ASVK, &ARK)
@@ -104,7 +104,7 @@ impl Chain {
         })
     }
 
-    #[cfg(feature = "openssl")]
+    #[cfg(feature = "crypto-openssl")]
     /// Deserialize the certificates from a PEM stack to a CA chain.
     pub fn from_pem_bytes(stack: &[u8]) -> Result<Self> {
         let certificates = X509::stack_from_pem(stack)?;
@@ -119,22 +119,22 @@ impl Chain {
 
 #[cfg(all(
     not(feature = "sev"),
-    any(feature = "openssl", feature = "crypto_nossl")
+    any(feature = "crypto-openssl", feature = "crypto-rust")
 ))]
 impl From<crate::types::primitives::Generation> for Chain {
     fn from(gen: crate::types::primitives::Generation) -> Self {
         let (ark, ask) = match gen {
             crate::types::primitives::Generation::Milan => (
-                super::super::builtin::milan::ark().unwrap(),
-                super::super::builtin::milan::ask().unwrap(),
+                super::builtin::milan::ark().unwrap(),
+                super::builtin::milan::ask().unwrap(),
             ),
             crate::types::primitives::Generation::Genoa => (
-                super::super::builtin::genoa::ark().unwrap(),
-                super::super::builtin::genoa::ask().unwrap(),
+                super::builtin::genoa::ark().unwrap(),
+                super::builtin::genoa::ask().unwrap(),
             ),
             crate::types::primitives::Generation::Turin => (
-                super::super::builtin::turin::ark().unwrap(),
-                super::super::builtin::turin::ask().unwrap(),
+                super::builtin::turin::ark().unwrap(),
+                super::builtin::turin::ask().unwrap(),
             ),
             crate::types::primitives::Generation::Venice => {
                 panic!("Venice SNP CA chain is not yet implemented")

@@ -9,7 +9,12 @@
 #[cfg(all(any(feature = "sev", feature = "snp"), target_os = "linux"))]
 mod linux;
 
-#[cfg(all(feature = "sev", target_os = "linux"))]
+#[cfg(all(
+    feature = "sev",
+    feature = "endorser",
+    feature = "verifier",
+    target_os = "linux"
+))]
 pub mod sev;
 
 #[cfg(all(feature = "snp", target_os = "linux"))]

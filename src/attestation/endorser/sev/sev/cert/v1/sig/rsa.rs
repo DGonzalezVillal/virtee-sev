@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-#[cfg(feature = "openssl")]
+#[cfg(feature = "crypto-openssl")]
 use super::*;
 
 #[repr(C)]
@@ -27,7 +27,7 @@ impl Default for Signature {
     }
 }
 
-#[cfg(feature = "openssl")]
+#[cfg(feature = "crypto-openssl")]
 impl From<bn::BigNum> for Signature {
     #[inline]
     fn from(value: bn::BigNum) -> Self {
@@ -35,7 +35,7 @@ impl From<bn::BigNum> for Signature {
     }
 }
 
-#[cfg(feature = "openssl")]
+#[cfg(feature = "crypto-openssl")]
 impl TryFrom<&[u8]> for Signature {
     type Error = Error;
 
@@ -45,7 +45,7 @@ impl TryFrom<&[u8]> for Signature {
     }
 }
 
-#[cfg(feature = "openssl")]
+#[cfg(feature = "crypto-openssl")]
 impl TryFrom<&Signature> for bn::BigNum {
     type Error = Error;
 
@@ -55,7 +55,7 @@ impl TryFrom<&Signature> for bn::BigNum {
     }
 }
 
-#[cfg(feature = "openssl")]
+#[cfg(feature = "crypto-openssl")]
 impl TryFrom<&Signature> for Vec<u8> {
     type Error = Error;
 

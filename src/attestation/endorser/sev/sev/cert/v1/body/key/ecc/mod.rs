@@ -2,7 +2,7 @@
 
 pub mod group;
 
-#[cfg(feature = "openssl")]
+#[cfg(feature = "crypto-openssl")]
 use super::*;
 
 #[repr(C)]
@@ -32,7 +32,7 @@ impl PartialEq for PubKey {
     }
 }
 
-#[cfg(feature = "openssl")]
+#[cfg(feature = "crypto-openssl")]
 impl TryFrom<&PubKey> for ec::EcKey<pkey::Public> {
     type Error = Error;
 
@@ -46,7 +46,7 @@ impl TryFrom<&PubKey> for ec::EcKey<pkey::Public> {
     }
 }
 
-#[cfg(feature = "openssl")]
+#[cfg(feature = "crypto-openssl")]
 impl TryFrom<&PubKey> for pkey::PKey<pkey::Public> {
     type Error = Error;
 
@@ -55,7 +55,7 @@ impl TryFrom<&PubKey> for pkey::PKey<pkey::Public> {
     }
 }
 
-#[cfg(feature = "openssl")]
+#[cfg(feature = "crypto-openssl")]
 impl TryFrom<&ec::EcKey<pkey::Private>> for PubKey {
     type Error = Error;
 
@@ -76,7 +76,7 @@ impl TryFrom<&ec::EcKey<pkey::Private>> for PubKey {
     }
 }
 
-#[cfg(feature = "openssl")]
+#[cfg(feature = "crypto-openssl")]
 impl PubKey {
     pub fn generate(group: group::Group) -> Result<(Self, ec::EcKey<pkey::Private>)> {
         let grp: ec::EcGroup = group.try_into()?;

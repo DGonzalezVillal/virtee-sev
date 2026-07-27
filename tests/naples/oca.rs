@@ -17,7 +17,7 @@ fn encode() {
     assert_eq!(OCA.to_vec(), output);
 }
 
-#[cfg(feature = "openssl")]
+#[cfg(feature = "crypto-openssl")]
 #[test]
 fn verify() {
     let mut mut_oca = OCA;
@@ -25,7 +25,7 @@ fn verify() {
     (&oca, &oca).verify().unwrap();
 }
 
-#[cfg(feature = "openssl")]
+#[cfg(feature = "crypto-openssl")]
 #[test]
 fn create() {
     let mut pdh = sev::Certificate::decode(&mut &PDH[..], ()).unwrap();

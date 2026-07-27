@@ -7,13 +7,13 @@ use crate::parser::ByteParser;
 use std::convert::TryFrom;
 use std::io::{Error, Result};
 
-#[cfg(feature = "openssl")]
+#[cfg(feature = "crypto-openssl")]
 use openssl::{bn, ecdsa, ecdsa::EcdsaSig, sha::Sha384};
 
-#[cfg(feature = "openssl")]
+#[cfg(feature = "crypto-openssl")]
 use super::openssl::{AsLeBytes, FromLe};
 
-#[cfg(feature = "openssl")]
+#[cfg(feature = "crypto-openssl")]
 impl From<ecdsa::EcdsaSig> for Signature {
     #[inline]
     fn from(value: ecdsa::EcdsaSig) -> Self {
@@ -21,7 +21,7 @@ impl From<ecdsa::EcdsaSig> for Signature {
     }
 }
 
-#[cfg(feature = "openssl")]
+#[cfg(feature = "crypto-openssl")]
 impl TryFrom<&Signature> for ecdsa::EcdsaSig {
     type Error = Error;
 
@@ -33,7 +33,7 @@ impl TryFrom<&Signature> for ecdsa::EcdsaSig {
     }
 }
 
-#[cfg(feature = "crypto_nossl")]
+#[cfg(feature = "crypto-rust")]
 impl TryFrom<&Signature> for p384::ecdsa::Signature {
     type Error = Error;
 
@@ -55,7 +55,7 @@ impl TryFrom<&Signature> for p384::ecdsa::Signature {
     }
 }
 
-#[cfg(feature = "openssl")]
+#[cfg(feature = "crypto-openssl")]
 /// Verify ECDSA signature on attestation report using VEK certificate
 pub fn verify_ecdsa_signature(body: &[u8], signature: &[u8], vek: &Certificate) -> Result<()> {
     let sev_sig = Signature::from_bytes(signature)?;
@@ -74,7 +74,7 @@ pub fn verify_ecdsa_signature(body: &[u8], signature: &[u8], vek: &Certificate) 
     }
 }
 
-#[cfg(feature = "crypto_nossl")]
+#[cfg(feature = "crypto-rust")]
 /// Verify ECDSA signature on attestation report using VEK certificate
 pub fn verify_ecdsa_signature(body: &[u8], signature: &[u8], vek: &Certificate) -> Result<()> {
     let sev_sig = Signature::from_bytes(signature)?;
@@ -103,7 +103,7 @@ pub fn verify_ecdsa_signature(body: &[u8], signature: &[u8], vek: &Certificate) 
 mod tests {
     use crate::attestation::evidence::snp::Signature;
 
-    #[cfg(feature = "openssl")]
+    #[cfg(feature = "crypto-openssl")]
     mod openssl_tests {
         use super::*;
         use openssl::{bn::BigNum, ecdsa};
@@ -128,8 +128,8 @@ mod tests {
         }
     }
 
-    #[cfg(feature = "crypto_nossl")]
-    mod crypto_nossl_tests {
+    #[cfg(feature = "crypto-rust")]
+    mod crypto_rust_tests {
         use super::*;
         use std::convert::TryInto;
 

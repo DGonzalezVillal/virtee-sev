@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-#[cfg(feature = "openssl")]
+#[cfg(feature = "crypto-openssl")]
 use openssl::error::ErrorStack;
 use std::{
     array::TryFromSliceError,
@@ -10,12 +10,12 @@ use std::{
     io,
 };
 
-#[cfg(all(feature = "openssl", feature = "sev"))]
+#[cfg(all(feature = "crypto-openssl", feature = "sev"))]
 use rdrand::ErrorCode;
 
 use std::os::raw::c_int;
 
-#[cfg(feature = "openssl")]
+#[cfg(feature = "crypto-openssl")]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 /// Used for representing known errors when handling snp::Certificates.
 pub enum CertFormatError {
@@ -23,10 +23,10 @@ pub enum CertFormatError {
     UnknownFormat,
 }
 
-#[cfg(feature = "openssl")]
+#[cfg(feature = "crypto-openssl")]
 impl std::error::Error for CertFormatError {}
 
-#[cfg(feature = "openssl")]
+#[cfg(feature = "crypto-openssl")]
 impl std::fmt::Display for CertFormatError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -904,7 +904,7 @@ impl std::convert::From<TryFromSliceError> for ArrayError {
 /// Errors when calculating the ID BLOCK
 #[derive(Debug)]
 pub enum IdBlockError {
-    #[cfg(all(feature = "snp", feature = "openssl"))]
+    #[cfg(all(feature = "snp", feature = "crypto-openssl"))]
     /// TryFrom Slice Error handling
     CryptoErrorStack(openssl::error::ErrorStack),
 
@@ -930,7 +930,7 @@ pub enum IdBlockError {
 impl std::fmt::Display for IdBlockError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            #[cfg(all(feature = "snp", feature = "openssl"))]
+            #[cfg(all(feature = "snp", feature = "crypto-openssl"))]
             IdBlockError::CryptoErrorStack(e) => write!(f, "Error when with OPENSSL: {e}"),
             IdBlockError::LargeArrayError(e) => write!(f, "{e}"),
             IdBlockError::FileError(e) => write!(f, "Failed handling file: {e}"),
@@ -951,7 +951,7 @@ impl std::fmt::Display for IdBlockError {
 
 impl std::error::Error for IdBlockError {}
 
-#[cfg(all(feature = "snp", feature = "openssl"))]
+#[cfg(all(feature = "snp", feature = "crypto-openssl"))]
 impl std::convert::From<openssl::error::ErrorStack> for IdBlockError {
     fn from(value: openssl::error::ErrorStack) -> Self {
         Self::CryptoErrorStack(value)
@@ -1119,7 +1119,7 @@ impl std::convert::From<ArrayError> for MeasurementError {
     }
 }
 
-#[cfg(all(feature = "openssl", feature = "sev"))]
+#[cfg(all(feature = "crypto-openssl", feature = "sev"))]
 #[derive(Debug)]
 /// Used to describe errors related to SEV-ES "Sessions".
 pub enum SessionError {
@@ -1133,21 +1133,21 @@ pub enum SessionError {
     IOError(std::io::Error),
 }
 
-#[cfg(all(feature = "openssl", feature = "sev"))]
+#[cfg(all(feature = "crypto-openssl", feature = "sev"))]
 impl From<ErrorCode> for SessionError {
     fn from(value: ErrorCode) -> Self {
         Self::RandError(value)
     }
 }
 
-#[cfg(all(feature = "openssl", feature = "sev"))]
+#[cfg(all(feature = "crypto-openssl", feature = "sev"))]
 impl From<std::io::Error> for SessionError {
     fn from(value: std::io::Error) -> Self {
         Self::IOError(value)
     }
 }
 
-#[cfg(all(feature = "openssl", feature = "sev"))]
+#[cfg(all(feature = "crypto-openssl", feature = "sev"))]
 impl From<ErrorStack> for SessionError {
     fn from(value: ErrorStack) -> Self {
         Self::OpenSSLStack(value)
@@ -1483,7 +1483,7 @@ mod tests {
         }
     }
 
-    #[cfg(all(feature = "openssl", feature = "sev"))]
+    #[cfg(all(feature = "crypto-openssl", feature = "sev"))]
     #[test]
     fn test_openssl_features_complete() {
         // Test CertFormatError

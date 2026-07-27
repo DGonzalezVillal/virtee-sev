@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #![cfg(all(
-    feature = "openssl",
+    feature = "crypto-openssl",
     target_os = "linux",
     feature = "sev",
     feature = "launch",
+    feature = "endorser",
+    feature = "verifier",
     feature = "dangerous_hw_tests"
 ))]
 

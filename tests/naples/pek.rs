@@ -17,7 +17,7 @@ fn encode() {
     assert_eq!(PEK.to_vec(), output);
 }
 
-#[cfg(feature = "openssl")]
+#[cfg(feature = "crypto-openssl")]
 #[test]
 fn verify() {
     let mut mut_cek = CEK;

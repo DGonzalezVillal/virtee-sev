@@ -56,7 +56,7 @@ impl PartialEq for PubKey {
     }
 }
 
-#[cfg(feature = "openssl")]
+#[cfg(feature = "crypto-openssl")]
 impl TryFrom<&PubKey> for pkey::PKey<pkey::Public> {
     type Error = Error;
 
@@ -69,7 +69,7 @@ impl TryFrom<&PubKey> for pkey::PKey<pkey::Public> {
     }
 }
 
-#[cfg(feature = "openssl")]
+#[cfg(feature = "crypto-openssl")]
 impl TryFrom<&PubKey> for PublicKey<Usage> {
     type Error = Error;
 
@@ -85,7 +85,7 @@ impl TryFrom<&PubKey> for PublicKey<Usage> {
     }
 }
 
-#[cfg(feature = "openssl")]
+#[cfg(feature = "crypto-openssl")]
 impl PubKey {
     pub fn generate(usage: Usage) -> Result<(PubKey, PrivateKey<Usage>)> {
         let algo = match usage {

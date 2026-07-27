@@ -8,16 +8,16 @@ pub mod ca;
 /// Built-in certificates for Milan, Genoa, and Turin machines.
 pub mod builtin;
 
-#[cfg(feature = "openssl")]
+#[cfg(feature = "crypto-openssl")]
 mod cert;
-#[cfg(feature = "crypto_nossl")]
+#[cfg(feature = "crypto-rust")]
 mod cert_nossl;
 
 mod chain;
 
-#[cfg(feature = "openssl")]
+#[cfg(feature = "crypto-openssl")]
 pub use cert::Certificate;
-#[cfg(feature = "crypto_nossl")]
+#[cfg(feature = "crypto-rust")]
 pub use cert_nossl::Certificate;
 
 pub use chain::Chain;

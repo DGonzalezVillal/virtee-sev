@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-#[cfg(feature = "openssl")]
+#[cfg(feature = "crypto-openssl")]
 use super::*;
 
 #[repr(C)]
@@ -24,7 +24,7 @@ impl Default for Algorithm {
     }
 }
 
-#[cfg(feature = "openssl")]
+#[cfg(feature = "crypto-openssl")]
 impl TryFrom<Algorithm> for pkey::Id {
     type Error = Error;
 
@@ -38,7 +38,7 @@ impl TryFrom<Algorithm> for pkey::Id {
     }
 }
 
-#[cfg(feature = "openssl")]
+#[cfg(feature = "crypto-openssl")]
 impl TryFrom<Algorithm> for hash::MessageDigest {
     type Error = Error;
 

@@ -30,7 +30,7 @@ impl std::fmt::Debug for Certificate {
     }
 }
 
-#[cfg(feature = "openssl")]
+#[cfg(feature = "crypto-openssl")]
 impl std::fmt::Display for Certificate {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         use std::fmt::Error;
@@ -94,7 +94,7 @@ impl Encoder<()> for Certificate {
     }
 }
 
-#[cfg(feature = "openssl")]
+#[cfg(feature = "crypto-openssl")]
 impl Encoder<Body> for Certificate {
     fn encode(&self, writer: &mut impl Write, _: Body) -> Result<()> {
         match self.version() {
@@ -131,7 +131,7 @@ impl ser::Serialize for Certificate {
     }
 }
 
-#[cfg(feature = "openssl")]
+#[cfg(feature = "crypto-openssl")]
 impl TryFrom<&Certificate> for [Option<Signature>; 2] {
     type Error = Error;
 
@@ -165,7 +165,7 @@ impl TryFrom<&Certificate> for crate::attestation::endorser::sev::Usage {
     }
 }
 
-#[cfg(feature = "openssl")]
+#[cfg(feature = "crypto-openssl")]
 impl TryFrom<&Certificate> for PublicKey<Usage> {
     type Error = Error;
 
@@ -179,7 +179,7 @@ impl TryFrom<&Certificate> for PublicKey<Usage> {
     }
 }
 
-#[cfg(feature = "openssl")]
+#[cfg(feature = "crypto-openssl")]
 impl Signer<Certificate> for PrivateKey<Usage> {
     type Output = ();
 
@@ -192,7 +192,7 @@ impl Signer<Certificate> for PrivateKey<Usage> {
 }
 
 impl Certificate {
-    #[cfg(feature = "openssl")]
+    #[cfg(feature = "crypto-openssl")]
     /// Generates a private key and its public certificate.
     pub fn generate(usage: Usage) -> Result<(Self, PrivateKey<Usage>)> {
         let (crt, prv) = v1::Certificate::generate(usage)?;

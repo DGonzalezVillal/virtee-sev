@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
-#[cfg(feature = "openssl")]
+#[cfg(feature = "crypto-openssl")]
 use super::*;
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct Group(u32);
 
-#[cfg(feature = "openssl")]
+#[cfg(feature = "crypto-openssl")]
 impl Group {
     pub const P256: Group = Group(1u32.to_le());
     pub const P384: Group = Group(2u32.to_le());
@@ -21,7 +21,7 @@ impl Group {
     }
 }
 
-#[cfg(feature = "openssl")]
+#[cfg(feature = "crypto-openssl")]
 impl TryFrom<Group> for nid::Nid {
     type Error = Error;
 
@@ -34,7 +34,7 @@ impl TryFrom<Group> for nid::Nid {
     }
 }
 
-#[cfg(feature = "openssl")]
+#[cfg(feature = "crypto-openssl")]
 impl TryFrom<nid::Nid> for Group {
     type Error = Error;
 
@@ -47,7 +47,7 @@ impl TryFrom<nid::Nid> for Group {
     }
 }
 
-#[cfg(feature = "openssl")]
+#[cfg(feature = "crypto-openssl")]
 impl TryFrom<Group> for ec::EcGroup {
     type Error = Error;
 
@@ -56,7 +56,7 @@ impl TryFrom<Group> for ec::EcGroup {
     }
 }
 
-#[cfg(feature = "openssl")]
+#[cfg(feature = "crypto-openssl")]
 impl TryFrom<&ec::EcGroupRef> for Group {
     type Error = Error;
 
