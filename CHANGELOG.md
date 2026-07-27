@@ -73,6 +73,9 @@ All notable changes to this project will be documented in this file.
 - Removed `openssl` and `crypto_nossl` feature aliases; use `crypto-openssl`
   and `crypto-rust` instead.
 - Guest firmware ioctls (`firmware::guest`) compile only with `attester`.
+- SNP platform APIs take [`Generation`] explicitly instead of auto-detecting via
+  CPUID. [`identify_host_generation`](crate::types::primitives::identify_host_generation)
+  remains available on Linux x86_64 as an optional helper.
 - Moved `PlatformInfo` and `KeyInfo` to `attestation::evidence::snp::fields`.
   These are grouped report-body parsing views, not standalone SNP ABI types.
 - Grouped `Version` and `GuestPolicy` under `snp::types::primitives` and `MaskId`

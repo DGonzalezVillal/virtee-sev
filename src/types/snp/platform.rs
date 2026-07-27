@@ -10,7 +10,6 @@ pub use crate::firmware::host::types::RawData;
 #[cfg(target_os = "linux")]
 use crate::error::CertError;
 use crate::{
-    firmware::host::cpuid,
     parser::{ByteParser, Decoder, Encoder},
     types::primitives::Generation,
     util::{
@@ -316,22 +315,6 @@ impl TryFrom<(Config, Generation)> for FFI::types::SnpSetConfig {
     }
 }
 
-/// TryFrom to FFI Config type when CPU Generation is unknown
-impl TryFrom<Config> for FFI::types::SnpSetConfig {
-    type Error = std::io::Error;
-
-    fn try_from(value: Config) -> Result<Self, Self::Error> {
-        let mut snp_config: SnpSetConfig = Default::default();
-        let generation = cpuid::identify_host_generation()?;
-
-        let tcb = value.reported_tcb.to_bytes_with(generation)?;
-        snp_config.reported_tcb = tcb;
-        snp_config.mask_id = value.mask_id;
-
-        Ok(snp_config)
-    }
-}
-
 /// TryFrom from FFI Config type when CPU Generation is manually passed in
 impl TryFrom<(FFI::types::SnpSetConfig, Generation)> for Config {
     type Error = std::io::Error;
@@ -341,21 +324,6 @@ impl TryFrom<(FFI::types::SnpSetConfig, Generation)> for Config {
         Ok(Self {
             reported_tcb,
             mask_id: value.0.mask_id,
-            ..Default::default()
-        })
-    }
-}
-
-/// TryFrom from FFI Config type when CPU Generation is unknown
-impl TryFrom<FFI::types::SnpSetConfig> for Config {
-    type Error = std::io::Error;
-
-    fn try_from(value: FFI::types::SnpSetConfig) -> Result<Self, Self::Error> {
-        let generation = cpuid::identify_host_generation()?;
-        let reported_tcb = TcbVersion::from_bytes_with(&value.reported_tcb, generation)?;
-        Ok(Self {
-            reported_tcb,
-            mask_id: value.mask_id,
             ..Default::default()
         })
     }

@@ -7,5 +7,5 @@ pub(crate) mod types;
 #[cfg(all(target_os = "linux", feature = "platform"))]
 pub(crate) mod ioctl;
 
-#[cfg(all(target_os = "linux", feature = "snp"))]
+#[cfg(all(target_os = "linux", target_arch = "x86_64", feature = "snp"))]
 pub(crate) mod cpuid;

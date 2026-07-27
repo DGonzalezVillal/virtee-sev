@@ -20,7 +20,7 @@ use crate::firmware::host::{
 use crate::parser::ByteParser;
 
 #[cfg(target_os = "linux")]
-use crate::firmware::host::cpuid;
+use crate::types::primitives::Generation;
 
 #[cfg(target_os = "linux")]
 use std::convert::TryInto;
@@ -28,7 +28,13 @@ use std::convert::TryInto;
 #[cfg(target_os = "linux")]
 impl Firmware {
     /// Query the SNP platform status.
-    pub fn snp_platform_status(&mut self) -> Result<SnpPlatformStatus, UserApiError> {
+    ///
+    /// `generation` selects the TCB layout used to decode platform and reported
+    /// TCB versions in the response.
+    pub fn snp_platform_status(
+        &mut self,
+        generation: Generation,
+    ) -> Result<SnpPlatformStatus, UserApiError> {
         let mut platform_status: FFISnpPlatformStatus = FFISnpPlatformStatus::default();
 
         let mut cmd_buf = Command::from_mut(&mut platform_status);
@@ -36,8 +42,6 @@ impl Firmware {
         SNP_PLATFORM_STATUS
             .ioctl(&mut self.0, &mut cmd_buf)
             .map_err(|_| cmd_buf.encapsulate())?;
-
-        let generation = cpuid::identify_host_generation()?;
 
         Ok(SnpPlatformStatus::from_bytes_with(
             &platform_status.buffer,
@@ -62,8 +66,12 @@ impl Firmware {
     }
 
     /// Set the SNP Configuration.
-    pub fn snp_set_config(&mut self, new_config: Config) -> Result<(), UserApiError> {
-        let mut binding: SnpSetConfig = new_config.try_into()?;
+    pub fn snp_set_config(
+        &mut self,
+        new_config: Config,
+        generation: Generation,
+    ) -> Result<(), UserApiError> {
+        let mut binding: SnpSetConfig = (new_config, generation).try_into()?;
 
         let mut cmd_buf = Command::from_mut(&mut binding);
 
@@ -75,13 +83,15 @@ impl Firmware {
     }
 
     /// Insert a Version Loaded Endorsement Key Hashstick into the AMD Secure Processor.
-    pub fn snp_vlek_load(&mut self, hashstick: WrappedVlekHashstick) -> Result<(), UserApiError> {
+    pub fn snp_vlek_load(
+        &mut self,
+        hashstick: WrappedVlekHashstick,
+        generation: Generation,
+    ) -> Result<(), UserApiError> {
         use std::convert::TryFrom;
 
         use crate::firmware::host as FFI;
         use FFI::types::{SnpVlekLoad, WrappedVlekHashstick as FFIWrappedVlekHashstick};
-
-        let generation = cpuid::identify_host_generation()?;
 
         let buffer = hashstick.to_bytes_with(generation)?;
 

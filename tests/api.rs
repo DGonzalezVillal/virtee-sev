@@ -66,7 +66,7 @@ mod sev {
         cached_chain::rm_cached_chain();
     }
 
-    #[cfg(feature = "openssl")]
+    #[cfg(feature = "crypto-openssl")]
     #[cfg_attr(not(host), ignore)]
     #[test]
     fn pdh_cert_export() {
@@ -83,7 +83,7 @@ mod sev {
         chain.verify().unwrap();
     }
 
-    #[cfg(all(feature = "openssl", feature = "dangerous_hw_tests"))]
+    #[cfg(all(feature = "crypto-openssl", feature = "dangerous_hw_tests"))]
     #[cfg_attr(not(host), ignore)]
     #[test]
     #[serial]
@@ -121,6 +121,21 @@ mod sev {
 mod snp {
     use serial_test::serial;
     use sev::platform::{snp::{Config, MaskId, SnpPlatformStatus, TcbVersion}, Firmware};
+    use sev::types::primitives::Generation;
+
+    #[cfg(all(target_arch = "x86_64", feature = "snp"))]
+    use sev::types::primitives::identify_host_generation;
+
+    fn host_generation() -> Generation {
+        #[cfg(all(target_arch = "x86_64", feature = "snp"))]
+        {
+            identify_host_generation().expect("host CPUID")
+        }
+        #[cfg(not(all(target_arch = "x86_64", feature = "snp")))]
+        {
+            Generation::Milan
+        }
+    }
 
     #[cfg_attr(not(host), ignore)]
     #[test]
@@ -134,7 +149,7 @@ mod snp {
     #[test]
     fn platform_status() {
         let mut fw: Firmware = Firmware::open().unwrap();
-        let status: SnpPlatformStatus = fw.snp_platform_status().unwrap();
+        let status: SnpPlatformStatus = fw.snp_platform_status(host_generation()).unwrap();
 
         println!(
             "Platform status ioctl results:
@@ -180,7 +195,7 @@ mod snp {
     fn set_config_generation() {
         let mut fw: Firmware = Firmware::open().unwrap();
 
-        fw.snp_set_config(Config::default()).unwrap();
+        fw.snp_set_config(Config::default(), host_generation()).unwrap();
     }
 
     #[cfg_attr(not(all(host, feature = "dangerous_hw_tests")), ignore)]
@@ -189,7 +204,10 @@ mod snp {
     fn test_host_fw_error() {
         let mut fw: Firmware = Firmware::open().unwrap();
         let invalid_config = Config::new(TcbVersion::new(None, 100, 100, 100, 100), MaskId(31));
-        let fw_error = fw.snp_set_config(invalid_config).unwrap_err().to_string();
+        let fw_error = fw
+            .snp_set_config(invalid_config, host_generation())
+            .unwrap_err()
+            .to_string();
         assert_eq!(fw_error, "Firmware Error Encountered: Known SEV FW Error: Status Code: 0x16: Given parameter is invalid.")
     }
 }
