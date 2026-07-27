@@ -4,6 +4,7 @@
     feature = "openssl",
     target_os = "linux",
     feature = "sev",
+    feature = "launch",
     feature = "dangerous_hw_tests"
 ))]
 

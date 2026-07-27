@@ -11,7 +11,7 @@
 //! An entire certificate chain can be created using the `sevctl`
 //! utility.
 
-#![cfg(all(feature = "sev", feature = "dangerous_hw_tests"))]
+#![cfg(all(feature = "sev", feature = "dangerous_hw_tests", feature = "platform"))]
 
 #[cfg(feature = "openssl")]
 use crate::{

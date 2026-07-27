@@ -33,8 +33,10 @@
 //! By default, only the SEV-SNP library is compiled. First-generation SEV
 //! (pre-SNP) support — including platform APIs, certificate and attestation
 //! report verification, launch, and session — is available via the `sev`
-//! feature flag. That stack is separate from SEV-SNP and is not needed for
-//! SNP-only consumers such as remote attestation verifiers.
+//! feature flag. Host platform management (`/dev/sev`) requires the `platform`
+//! feature; KVM guest launch requires `launch` (which enables `platform`).
+//! That legacy stack is separate from SEV-SNP and is not needed for SNP-only
+//! consumers such as remote attestation verifiers.
 //! Because many modules provide support to both legacy SEV and SEV-SNP, they
 //! have been split into individual sub-modules `sev.rs` and `snp.rs`, isolating
 //! generation specific behavior.
@@ -91,11 +93,8 @@
 //! ## Platform Management
 //!
 //! Refer to the [`platform`] module for host platform APIs (`/dev/sev`).
-//! [`platform::Firmware`] is the shared device handle; legacy `platform_status`,
-//! `get_identifier`, and status types (`Build`, `Status`, `Version`, …) live
-//! on that shared handle. Other generation-specific methods live in
-//! [`platform::sev`] and [`platform::snp`].
-//! Linux ioctl layouts are internal under [`firmware`].
+//! Enable the `platform` Cargo feature to compile it. [`launch`] depends on
+//! `platform` and adds KVM guest bring-up ioctls.
 //!
 //! [`platform`]: crate::platform
 //! [`platform::Firmware`]: crate::platform::Firmware
@@ -105,7 +104,10 @@
 //!
 //! ## Guest Management
 //!
-//! Refer to the [launch](crate::launch) module for more information.
+//! Refer to the [`launch`] module for KVM guest bring-up. Enable the `launch`
+//! Cargo feature to compile it (`launch` implies `platform`).
+//!
+//! [`launch`]: crate::launch
 //!
 //! ## Cryptographic Verification
 //!
@@ -137,15 +139,12 @@
 //!
 //! ## Using the C API
 //!
-//! Projects in C can take advantage of the C API for the SEV [launch] ioctls.
-//! To install the C API, users can use `cargo-c` with the features they would
+//! Projects in C can take advantage of the C API for the SEV [`launch`] ioctls.
+//! Enable the `launch` feature and use `cargo-c` with the features you would
 //! like to produce and install a `pkg-config` file, a static library, a dynamic
 //! library, and a C header:
 //!
-//! `cargo cinstall --prefix=/usr --libdir=/usr/lib64`
-//!
-//! [platform]: ./src/platform/
-//! [launch]: ./src/launch/
+//! `cargo cinstall --prefix=/usr --libdir=/usr/lib64 --features launch`
 
 #![deny(clippy::all)]
 #![deny(missing_docs)]
@@ -164,10 +163,12 @@ pub mod types;
 #[cfg(any(feature = "sev", feature = "snp"))]
 pub mod attestation;
 
-#[cfg(any(feature = "sev", feature = "snp"))]
+#[cfg(feature = "platform")]
 pub mod platform;
 #[cfg(any(feature = "sev", feature = "snp"))]
 pub(crate) mod firmware;
+
+#[cfg(feature = "launch")]
 pub mod launch;
 mod util;
 
@@ -177,7 +178,8 @@ pub mod error;
 /// Module for Encoding and Decoding types.
 pub mod parser;
 
-#[cfg(all(feature = "sev", feature = "dangerous_hw_tests"))]
+#[cfg(all(feature = "sev", feature = "dangerous_hw_tests", feature = "platform"))]
 pub use util::cached_chain;
 
+#[cfg(feature = "launch")]
 use std::io::{Read, Write};

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-#![cfg(all(feature = "snp", target_os = "linux"))]
+#![cfg(all(feature = "snp", feature = "launch", target_os = "linux"))]
 
 use kvm_bindings::{kvm_create_guest_memfd, kvm_userspace_memory_region2, KVM_MEM_GUEST_MEMFD};
 use kvm_ioctls::{Kvm, VcpuExit};

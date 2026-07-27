@@ -6,6 +6,11 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+- Moved `PageType` from `launch` into `types::snp` so reference and launch
+  code share the SNP firmware page-type enum without coupling roles to launch.
+- Added `platform` and `launch` Cargo features. `platform` gates host `/dev/sev`
+  management; `launch` gates KVM guest bring-up and depends on `platform`.
+  Neither is enabled by default.
 - Introduced the `types` module with `types::snp`, `types::sev`, and
   `types::shared` for firmware ABI value types (replacing `snp::types`).
 - Moved first-generation SEV ABI types (`Version`, `Build`, `State`, `Status`)
@@ -54,6 +59,8 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
+- Host platform APIs and guest launch are no longer compiled by default; enable
+  `platform` or `launch` explicitly when needed.
 - Moved `PlatformInfo` and `KeyInfo` to `attestation::evidence::snp::fields`.
   These are grouped report-body parsing views, not standalone SNP ABI types.
 - Grouped `Version` and `GuestPolicy` under `snp::types::primitives` and `MaskId`
