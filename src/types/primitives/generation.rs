@@ -13,8 +13,8 @@ use std::convert::TryFrom;
 /// a `Generation` from it with the [TryFrom](
 /// https://doc.rust-lang.org/std/convert/trait.TryFrom.html) trait.
 ///
-/// Host-side CPUID detection is available via [`identify_host_generation`] on
-/// Linux x86_64 when the `snp` feature is enabled. Other targets must supply
+/// Host-side CPUID detection is available via [`Generation::identify_host_generation`]
+/// on Linux x86_64 when the `snp` feature is enabled. Other targets must supply
 /// [`Generation`] explicitly to platform and parsing APIs.
 ///
 /// ## Example
@@ -151,17 +151,17 @@ impl Generation {
             )),
         }
     }
-}
 
-/// Identify the local EPYC generation using CPUID.
-///
-/// Only available when compiling for Linux x86_64 with the `snp` feature.
-/// Platform APIs such as [`crate::platform::Firmware::snp_platform_status`]
-/// take [`Generation`] explicitly; use this helper when running on the host and
-/// the generation is not already known.
-#[cfg(all(target_os = "linux", target_arch = "x86_64", feature = "snp"))]
-pub fn identify_host_generation() -> Result<Generation, std::io::Error> {
-    crate::firmware::host::cpuid::identify_host_generation()
+    /// Identify the local EPYC generation using CPUID.
+    ///
+    /// Only available when compiling for Linux x86_64 with the `snp` feature.
+    /// Platform APIs such as [`crate::platform::Firmware::snp_platform_status`]
+    /// take [`Generation`] explicitly; use this helper when running on the host and
+    /// the generation is not already known.
+    #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+    pub fn identify_host_generation() -> Result<Self, std::io::Error> {
+        crate::firmware::cpuid::identify_host_generation()
+    }
 }
 
 #[cfg(any(feature = "sev", feature = "snp"))]

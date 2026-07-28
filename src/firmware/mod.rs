@@ -5,8 +5,11 @@
 //! Public host platform APIs live in [`crate::platform`]. Guest attestation
 //! APIs live in [`crate::attestation::attester`].
 
-#[cfg(any(feature = "sev", feature = "snp"))]
+#[cfg(feature = "platform")]
 pub(crate) mod host;
+
+#[cfg(all(target_os = "linux", target_arch = "x86_64", feature = "snp"))]
+pub(crate) mod cpuid;
 
 #[cfg(all(feature = "attester", feature = "snp"))]
 pub(crate) mod guest;

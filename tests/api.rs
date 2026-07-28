@@ -117,13 +117,10 @@ mod snp {
     use sev::platform::{snp::{Config, MaskId, SnpPlatformStatus, TcbVersion}, Firmware};
     use sev::types::primitives::Generation;
 
-    #[cfg(all(target_arch = "x86_64", feature = "snp"))]
-    use sev::types::primitives::identify_host_generation;
-
     fn host_generation() -> Generation {
         #[cfg(all(target_arch = "x86_64", feature = "snp"))]
         {
-            identify_host_generation().expect("host CPUID")
+            Generation::identify_host_generation().expect("host CPUID")
         }
         #[cfg(not(all(target_arch = "x86_64", feature = "snp")))]
         {
