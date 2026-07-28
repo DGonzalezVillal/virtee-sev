@@ -7,7 +7,7 @@
 
 mod key;
 
-use crate::{error::SessionError, platform::sev::Build};
+use crate::{error::SessionError, types::shared::primitives::FirmwareVersion};
 
 use super::{Header, HeaderFlags, Measurement, Policy, PolicyFlags, Secret, Session as LaunchSession, Start};
 
@@ -163,14 +163,18 @@ impl Session<Initialized> {
     pub fn verify(
         self,
         digest: &[u8],
-        build: Build,
+        firmware_version: FirmwareVersion,
         msr: Measurement,
     ) -> Result<Session<Verified>> {
         let key = pkey::PKey::hmac(&self.tik)?;
         let mut sig = sign::Signer::new(hash::MessageDigest::sha256(), &key)?;
 
         sig.update(&[0x04u8])?;
-        sig.update(&[build.version.major, build.version.minor, build.build])?;
+        sig.update(&[
+            firmware_version.major,
+            firmware_version.minor,
+            firmware_version.build,
+        ])?;
         sig.update(&self.policy.bytes())?;
         sig.update(digest)?;
         sig.update(&msr.mnonce)?;
@@ -214,7 +218,7 @@ impl Session<Measuring> {
     /// Verifies the session's measurement against the AMD SP's measurement.
     pub fn verify(
         mut self,
-        build: Build,
+        firmware_version: FirmwareVersion,
         msr: Measurement,
     ) -> Result<Session<Verified>> {
         let digest = self.data.0.finish()?;
@@ -225,14 +229,14 @@ impl Session<Measuring> {
             data: Initialized,
         };
 
-        session.verify(&digest, build, msr)
+        session.verify(&digest, firmware_version, msr)
     }
 
     /// Verifies the session's measurement against the AMD SP's measurement
     /// using an externally generated digest.
     pub fn verify_with_digest(
         self,
-        build: Build,
+        firmware_version: FirmwareVersion,
         msr: Measurement,
         digest: &[u8],
     ) -> Result<Session<Verified>> {
@@ -243,7 +247,7 @@ impl Session<Measuring> {
             data: Initialized,
         };
 
-        session.verify(digest, build, msr)
+        session.verify(digest, firmware_version, msr)
     }
 }
 
@@ -286,7 +290,7 @@ impl Session<Verified> {
 #[cfg(test)]
 mod initialized {
     use super::*;
-    use crate::platform::sev::{Build, Version};
+    use crate::types::shared::primitives::FirmwareVersion;
 
     #[test]
     fn session() {
@@ -370,14 +374,10 @@ mod initialized {
             tik,
             data: Initialized,
         };
-        let build = Build {
-            version: Version {
-                major: 0x00,
-                minor: 0x12,
-            },
-            build: 0x0f,
-        };
+        let firmware_version = FirmwareVersion::new(0x00, 0x12, 0x0f);
 
-        session.verify(&digest, build, measurement).unwrap();
+        session
+            .verify(&digest, firmware_version, measurement)
+            .unwrap();
     }
 }

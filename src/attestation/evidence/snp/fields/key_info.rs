@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::types::snp::Version;
+use crate::types::shared::primitives::FirmwareVersion;
 use crate::{
     parser::{ByteParser, Decoder, Encoder},
     util::parser_helper::{ReadExt, WriteExt},
@@ -54,19 +54,19 @@ impl KeyInfo {
     // SIGNING_KEY field: bits 2-4
     const SIGNING_KEY_MASK: u32 = 0b111 << 2;
 
-    // Version constants
-    const VERSION_1_53: Version = Version {
+    // FirmwareVersion constants
+    const VERSION_1_53: FirmwareVersion = FirmwareVersion {
         major: 1,
         minor: 53,
         build: 0,
     };
-    const VERSION_1_54: Version = Version {
+    const VERSION_1_54: FirmwareVersion = FirmwareVersion {
         major: 1,
         minor: 54,
         build: 0,
     };
 
-    fn validate_reserved_bits(self, version: Version) -> std::io::Result<()> {
+    fn validate_reserved_bits(self, version: FirmwareVersion) -> std::io::Result<()> {
         let raw: u32 = self.0;
 
         // Bits 5-31 must always be zero
@@ -111,7 +111,7 @@ impl KeyInfo {
     ///
     /// # Returns
     /// A formatted string representation of the key info
-    pub fn display_for_version(&self, version: Version) -> String {
+    pub fn display_for_version(&self, version: FirmwareVersion) -> String {
         let mask_chip_key = if version >= Self::VERSION_1_53 {
             format!("{}", self.mask_chip_key())
         } else {
@@ -162,8 +162,8 @@ impl Decoder<()> for KeyInfo {
 }
 
 // Checking reserved bytes according to known reserved bytes in attestation report
-impl Decoder<Version> for KeyInfo {
-    fn decode(reader: &mut impl Read, version: Version) -> Result<Self, std::io::Error> {
+impl Decoder<FirmwareVersion> for KeyInfo {
+    fn decode(reader: &mut impl Read, version: FirmwareVersion) -> Result<Self, std::io::Error> {
         let raw: u32 = reader.read_bytes()?;
         let info = KeyInfo(raw);
         info.validate_reserved_bits(version)?;
@@ -176,7 +176,7 @@ impl ByteParser<()> for KeyInfo {
     const EXPECTED_LEN: Option<usize> = Some(4);
 }
 
-impl ByteParser<Version> for KeyInfo {
+impl ByteParser<FirmwareVersion> for KeyInfo {
     type Bytes = [u8; 4];
     const EXPECTED_LEN: Option<usize> = Some(4);
 }

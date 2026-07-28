@@ -2,7 +2,7 @@
 
 //! First-generation SEV platform management.
 
-pub use crate::types::sev::{Build, PlatformStatusFlags, State, Status, Version};
+pub use crate::types::sev::{PlatformStatusFlags, State, Status, Version};
 
 #[cfg(target_os = "linux")]
 use super::Firmware;

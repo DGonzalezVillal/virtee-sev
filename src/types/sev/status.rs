@@ -1,19 +1,28 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::State;
-pub use crate::firmware::host::types::PlatformStatusFlags;
-use crate::parser::{Decoder, Encoder};
-use crate::util::{TypeLoad, TypeSave};
-
-use std::{
-    fmt::Debug,
-    io::{Read, Write},
-};
+use crate::types::shared::primitives::FirmwareVersion;
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-/// Information about the SEV platform version.
+bitflags::bitflags! {
+    /// The platform's status flags.
+    #[derive(Debug, Default, Clone, PartialEq, Eq, PartialOrd, Ord)]
+    pub struct PlatformStatusFlags: u32 {
+        /// If set, this platform is owned. Otherwise, it is self-owned.
+        const OWNED           = 1 << 0;
+
+        /// If set, encrypted state functionality is present.
+        const ENCRYPTED_STATE = 1 << 8;
+    }
+}
+
+/// Information about the SEV platform version (major/minor only).
+///
+/// Used in ioctl layouts and certificate bodies where the build number is
+/// stored separately. For the full major/minor/build triple, use
+/// [`FirmwareVersion`](crate::types::shared::primitives::FirmwareVersion).
 #[repr(C)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
@@ -40,41 +49,17 @@ impl From<u16> for Version {
     }
 }
 
-/// A description of the SEV platform's build information.
-#[repr(C)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, PartialOrd)]
-pub struct Build {
-    /// The version information.
-    pub version: Version,
-
-    /// The build number.
-    pub build: u8,
-}
-
-impl std::fmt::Display for Build {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{}.{}", self.version, self.build)
-    }
-}
-
-impl Decoder<()> for Build {
-    fn decode(reader: &mut impl Read, _: ()) -> std::io::Result<Self> {
-        reader.load()
-    }
-}
-
-impl Encoder<()> for Build {
-    fn encode(&self, writer: &mut impl Write, _: ()) -> std::io::Result<()> {
-        writer.save(self)
+impl From<(Version, u8)> for FirmwareVersion {
+    fn from((version, build): (Version, u8)) -> Self {
+        Self::new(version.major, version.minor, build)
     }
 }
 
 /// Information regarding the SEV platform's current status.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Status {
-    /// The build number.
-    pub build: Build,
+    /// The firmware version (major, minor, build).
+    pub firmware_version: FirmwareVersion,
 
     /// The platform's current state.
     pub state: State,

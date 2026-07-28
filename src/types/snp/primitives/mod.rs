@@ -4,7 +4,5 @@
 //! id-block, and similar).
 
 mod policy;
-mod version;
 
 pub use policy::GuestPolicy;
-pub use version::Version;

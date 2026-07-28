@@ -3,7 +3,7 @@
 //! First-generation SEV ABI value types.
 
 mod platform;
-mod version;
+mod status;
 
 pub use platform::State;
-pub use version::{Build, PlatformStatusFlags, Status, Version};
+pub use status::{PlatformStatusFlags, Status, Version};

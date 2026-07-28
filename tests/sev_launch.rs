@@ -32,7 +32,7 @@ fn sev_launch_test() {
     const KVM_X86_SEV_VM: u64 = 2;
 
     let mut sev = Firmware::open().unwrap();
-    let build = sev.platform_status().unwrap().build;
+    let build = sev.platform_status().unwrap().firmware_version;
 
     // Generating OCA cert and private key
     let (mut oca, prv) = Certificate::generate(Usage::OCA).expect("Generating OCA key pair");

@@ -3,3 +3,4 @@
 //! ABI types shared across first-generation SEV and SEV-SNP.
 
 pub mod launch;
+pub mod primitives;

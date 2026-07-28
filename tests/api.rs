@@ -8,7 +8,8 @@ mod sev {
     use sev::cached_chain;
     use sev::{
         attestation::endorser::sev::sev::Usage,
-        platform::{sev::{Build, Version}, Firmware},
+        platform::Firmware,
+        types::shared::primitives::FirmwareVersion,
     };
 
     #[cfg(feature = "dangerous_hw_tests")]
@@ -27,14 +28,7 @@ mod sev {
         let mut fw = Firmware::open().unwrap();
         let status = fw.platform_status().unwrap();
         assert!(
-            status.build
-                > Build {
-                    version: Version {
-                        major: 0,
-                        minor: 14
-                    },
-                    ..Default::default()
-                }
+            status.firmware_version > FirmwareVersion::new(0, 14, 0)
         );
     }
 

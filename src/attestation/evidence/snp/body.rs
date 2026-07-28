@@ -4,7 +4,8 @@ use crate::{
     attestation::evidence::snp::SignatureAlgorithm,
     parser::Decoder,
     types::primitives::Generation,
-    types::snp::{GuestPolicy, TcbVersion, Version},
+    types::shared::primitives::FirmwareVersion,
+    types::snp::{GuestPolicy, TcbVersion},
     util::{hexline::HexLine, parser_helper::validate_reserved},
 };
 
@@ -104,10 +105,10 @@ pub struct ReportBody<'a> {
     pub committed_tcb: TcbVersion,
 
     /// Current firmware version (major.minor.build).
-    pub current: Version,
+    pub current: FirmwareVersion,
 
     /// Committed firmware version (major.minor.build).
-    pub committed: Version,
+    pub committed: FirmwareVersion,
 
     /// Launch TCB version, parsed for the inferred generation.
     pub launch_tcb: TcbVersion,
@@ -208,7 +209,7 @@ impl<'a> ReportBody<'a> {
         let version = ReportVariant::decode(&mut &body[0x00..0x04], ())?;
 
         // Parse firmware version early (needed for policy validation)
-        let current = Version {
+        let current = FirmwareVersion {
             build: body[0x1E8],
             minor: body[0x1E9],
             major: body[0x1EA],
@@ -305,7 +306,7 @@ impl<'a> ReportBody<'a> {
         validate_reserved(&body[0x1EB..0x1EC], 0x1EB)?;
 
         // Parse committed firmware version
-        let committed = Version {
+        let committed = FirmwareVersion {
             build: body[0x1EC],
             minor: body[0x1ED],
             major: body[0x1EE],

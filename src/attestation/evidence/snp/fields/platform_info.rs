@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::types::snp::Version;
+use crate::types::shared::primitives::FirmwareVersion;
 use crate::{
     parser::{ByteParser, Decoder, Encoder},
     util::parser_helper::{ReadExt, WriteExt},
@@ -64,24 +64,24 @@ impl PlatformInfo {
     // Bits 8-63: Reserved (always MBZ)
     const RESERVED_BITS_8_63: u64 = (!0u64) << 8;
 
-    // Version constants
-    const VERSION_1_55: Version = Version {
+    // FirmwareVersion constants
+    const VERSION_1_55: FirmwareVersion = FirmwareVersion {
         major: 1,
         minor: 55,
         build: 0,
     };
-    const VERSION_1_56: Version = Version {
+    const VERSION_1_56: FirmwareVersion = FirmwareVersion {
         major: 1,
         minor: 56,
         build: 0,
     };
-    const VERSION_1_57: Version = Version {
+    const VERSION_1_57: FirmwareVersion = FirmwareVersion {
         major: 1,
         minor: 57,
         build: 0,
     };
 
-    fn validate_reserved_bits(self, version: Version) -> std::io::Result<()> {
+    fn validate_reserved_bits(self, version: FirmwareVersion) -> std::io::Result<()> {
         let raw = self.0;
 
         // Bit 6 and bits 8-63 are always reserved
@@ -162,7 +162,7 @@ impl PlatformInfo {
     ///
     /// # Returns
     /// A formatted string representation of the platform info
-    pub fn display_for_version(&self, version: Version) -> String {
+    pub fn display_for_version(&self, version: FirmwareVersion) -> String {
         let ecc_enabled = if version >= Self::VERSION_1_55 {
             format!("{}", self.ecc_enabled())
         } else {
@@ -266,8 +266,8 @@ impl Decoder<()> for PlatformInfo {
 }
 
 // Checking reserved bytes according to known reserved bytes in attestation report
-impl Decoder<Version> for PlatformInfo {
-    fn decode(reader: &mut impl Read, version: Version) -> Result<Self, std::io::Error> {
+impl Decoder<FirmwareVersion> for PlatformInfo {
+    fn decode(reader: &mut impl Read, version: FirmwareVersion) -> Result<Self, std::io::Error> {
         let raw: u64 = reader.read_bytes()?;
         let info = PlatformInfo(raw);
         info.validate_reserved_bits(version)?;
@@ -280,7 +280,7 @@ impl ByteParser<()> for PlatformInfo {
     const EXPECTED_LEN: Option<usize> = Some(8);
 }
 
-impl ByteParser<Version> for PlatformInfo {
+impl ByteParser<FirmwareVersion> for PlatformInfo {
     type Bytes = [u8; 8];
     const EXPECTED_LEN: Option<usize> = Some(8);
 }

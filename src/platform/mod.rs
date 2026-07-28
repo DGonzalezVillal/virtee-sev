@@ -20,8 +20,11 @@ use crate::firmware::host::{ioctl::*, types::GetId};
 #[cfg(all(target_os = "linux", any(feature = "sev", feature = "snp")))]
 use crate::firmware::host::types::PlatformStatus;
 
+#[cfg(all(target_os = "linux", any(feature = "sev", feature = "snp")))]
+use crate::types::shared::primitives::FirmwareVersion;
+
 #[cfg(any(feature = "sev", feature = "snp"))]
-pub use crate::types::sev::{Build, State, Status, Version};
+pub use crate::types::sev::{State, Status, Version};
 
 #[cfg(target_os = "linux")]
 use crate::error::*;
@@ -91,13 +94,11 @@ impl Firmware {
             .map_err(|_| cmd_buf.encapsulate())?;
 
         Ok(Status {
-            build: Build {
-                version: Version {
-                    major: info.version.major,
-                    minor: info.version.minor,
-                },
-                build: info.build,
-            },
+            firmware_version: FirmwareVersion::new(
+                info.version.major,
+                info.version.minor,
+                info.build,
+            ),
             guests: info.guest_count,
             flags: info.flags,
             state: match info.state {

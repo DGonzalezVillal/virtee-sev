@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-use super::Version;
+use crate::types::shared::primitives::FirmwareVersion;
 use crate::{
     parser::{ByteParser, Decoder, Encoder},
     util::parser_helper::{ReadExt, WriteExt},
@@ -89,20 +89,19 @@ impl GuestPolicy {
     // Bit 25: PAGE_SWAP_DISABLE (added in v1.58)
     const PAGE_SWAP_DISABLE_BIT_25: u64 = 1u64 << 25;
 
-    // Version 1.55: Added CXL, AES-256-XTS, RAPL, CIPHERTEXT_HIDING (bits 21-24)
-    const VERSION_1_55: Version = Version {
+    // Version constants
+    const VERSION_1_55: FirmwareVersion = FirmwareVersion {
         major: 1,
         minor: 55,
         build: 0,
     };
-    // Version 1.58: Added PAGE_SWAP_DISABLE (bit 25)
-    const VERSION_1_58: Version = Version {
+    const VERSION_1_58: FirmwareVersion = FirmwareVersion {
         major: 1,
         minor: 58,
         build: 0,
     };
 
-    fn validate_reserved_bits(self, version: Version) -> std::io::Result<()> {
+    fn validate_reserved_bits(self, version: FirmwareVersion) -> std::io::Result<()> {
         let raw = self.0;
 
         // bit 17 must be 1 (RMB1)
@@ -184,7 +183,7 @@ impl GuestPolicy {
     ///
     /// # Returns
     /// A formatted string representation of the guest policy
-    pub fn display_for_version(&self, version: Version) -> String {
+    pub fn display_for_version(&self, version: FirmwareVersion) -> String {
         let cxl_allowed = if version >= Self::VERSION_1_55 {
             format!("{}", self.cxl_allowed())
         } else {
@@ -261,8 +260,8 @@ impl Decoder<()> for GuestPolicy {
 }
 
 // Checking reserved bytes according to known reserved bytes in attestation report
-impl Decoder<Version> for GuestPolicy {
-    fn decode(reader: &mut impl Read, version: Version) -> Result<Self, std::io::Error> {
+impl Decoder<FirmwareVersion> for GuestPolicy {
+    fn decode(reader: &mut impl Read, version: FirmwareVersion) -> Result<Self, std::io::Error> {
         let raw: u64 = reader.read_bytes()?;
         let policy = GuestPolicy(raw);
         policy.validate_reserved_bits(version)?;
@@ -270,7 +269,7 @@ impl Decoder<Version> for GuestPolicy {
     }
 }
 
-impl ByteParser<Version> for GuestPolicy {
+impl ByteParser<FirmwareVersion> for GuestPolicy {
     type Bytes = [u8; 8];
     const EXPECTED_LEN: Option<usize> = Some(8);
 }
@@ -426,7 +425,7 @@ mod tests {
 
         let buffer = original.to_bytes().unwrap();
         // Use a recent firmware version that supports all policy bits
-        let decoded = GuestPolicy::from_bytes_with(&buffer, Version::new(1, 58, 0)).unwrap();
+        let decoded = GuestPolicy::from_bytes_with(&buffer, FirmwareVersion::new(1, 58, 0)).unwrap();
         assert_eq!(original, decoded);
     }
     #[test]
