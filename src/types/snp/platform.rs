@@ -2,13 +2,8 @@
 
 //! SNP platform status, configuration, and certificate-table types.
 
-pub(crate) use crate::firmware::host as FFI;
-/// A representation of the type of data provided to cert-table parsing in
-/// [`crate::firmware::host::types::CertTableEntry`].
-pub use crate::firmware::host::types::RawData;
+pub use super::cert_table::{CertTableEntry, RawData};
 
-#[cfg(target_os = "linux")]
-use crate::error::CertError;
 use crate::{
     parser::{ByteParser, Decoder, Encoder},
     types::primitives::Generation,
@@ -18,15 +13,12 @@ use crate::{
     },
 };
 use std::{
-    convert::{TryFrom, TryInto},
     fmt::Display,
     io::{Read, Write},
     ops::BitOrAssign,
 };
 
 use bitfield::bitfield;
-
-use self::FFI::types::SnpSetConfig;
 
 pub use super::{CertType, MaskId, TcbVersion};
 
@@ -49,101 +41,6 @@ bitfield! {
 impl BitOrAssign for SnpPlatformStatusFlags {
     fn bitor_assign(&mut self, rhs: Self) {
         self.0 |= rhs.0;
-    }
-}
-
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive(Clone, Debug, PartialEq, Eq)]
-#[repr(C)]
-/// An entry with information regarding a specific certificate.
-pub struct CertTableEntry {
-    /// A Specificy certificate type.
-    pub cert_type: CertType,
-
-    /// The raw data of the certificate.
-    pub data: Vec<u8>,
-}
-
-impl Encoder<()> for CertTableEntry {
-    fn encode(&self, writer: &mut impl Write, _: ()) -> Result<(), std::io::Error> {
-        writer.write_bytes(self.cert_type.clone(), ())?;
-        writer.write_bytes(self.data.clone(), ())?;
-        Ok(())
-    }
-}
-
-impl Decoder<()> for CertTableEntry {
-    fn decode(reader: &mut impl Read, _: ()) -> Result<Self, std::io::Error> {
-        let cert_type = reader.read_bytes()?;
-        let data = reader.read_bytes()?;
-        Ok(Self { cert_type, data })
-    }
-}
-
-impl ByteParser<()> for CertTableEntry {
-    type Bytes = Vec<u8>;
-
-    fn from_bytes(bytes: &[u8]) -> std::io::Result<Self> {
-        let mut rdr: &[u8] = bytes;
-        Self::decode(&mut rdr, ())
-    }
-
-    fn to_bytes(&self) -> std::io::Result<Self::Bytes> {
-        let mut out = Vec::new();
-        self.encode(&mut out, ())?;
-        Ok(out)
-    }
-}
-
-impl CertTableEntry {
-    /// Façade for retreiving the GUID for the Entry.
-    pub fn guid_string(&self) -> String {
-        self.cert_type.to_string()
-    }
-
-    /// Get an immutable reference to the data stored in the entry.
-    pub fn data(&self) -> &[u8] {
-        self.data.as_slice()
-    }
-
-    /// Generates a certificate from the str GUID and data provided.
-    pub fn from_guid(guid: &uuid::Uuid, data: Vec<u8>) -> Result<Self, uuid::Error> {
-        Ok(Self {
-            cert_type: guid.try_into()?,
-            data,
-        })
-    }
-
-    /// Generates a certificate from the CertType and data provided.
-    pub fn new(cert_type: CertType, data: Vec<u8>) -> Self {
-        Self { cert_type, data }
-    }
-
-    /// Builds a Kernel formatted CertTable for sending the certificate content to the PSP.
-    #[cfg(target_os = "linux")]
-    pub fn cert_table_to_vec_bytes(table: &[Self]) -> Result<Vec<u8>, CertError> {
-        FFI::types::CertTableEntry::uapi_to_vec_bytes(table)
-    }
-
-    /// Takes in bytes in kernel CertTable format and returns in user API CertTable format.
-    #[cfg(target_os = "linux")]
-    pub fn vec_bytes_to_cert_table(bytes: &mut [u8]) -> Result<Vec<Self>, CertError> {
-        let cert_bytes_ptr: *mut FFI::types::CertTableEntry =
-            bytes.as_mut_ptr() as *mut FFI::types::CertTableEntry;
-
-        Ok(unsafe { FFI::types::CertTableEntry::parse_table(cert_bytes_ptr).unwrap() })
-    }
-}
-
-impl Ord for CertTableEntry {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.cert_type.cmp(&other.cert_type)
-    }
-}
-
-impl PartialOrd for CertTableEntry {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
     }
 }
 
@@ -297,35 +194,6 @@ impl Config {
             mask_id,
             reserved: [0; 52],
         }
-    }
-}
-
-/// TryFrom to FFI Config when manually passing in the CPU generation
-impl TryFrom<(Config, Generation)> for FFI::types::SnpSetConfig {
-    type Error = std::io::Error;
-
-    fn try_from(args: (Config, Generation)) -> Result<Self, Self::Error> {
-        let mut snp_config: SnpSetConfig = Default::default();
-        let (value, generation) = args;
-        let tcb = value.reported_tcb.to_bytes_with(generation)?;
-        snp_config.reported_tcb = tcb;
-        snp_config.mask_id = value.mask_id;
-
-        Ok(snp_config)
-    }
-}
-
-/// TryFrom from FFI Config type when CPU Generation is manually passed in
-impl TryFrom<(FFI::types::SnpSetConfig, Generation)> for Config {
-    type Error = std::io::Error;
-
-    fn try_from(value: (FFI::types::SnpSetConfig, Generation)) -> Result<Self, Self::Error> {
-        let reported_tcb = TcbVersion::from_bytes_with(&value.0.reported_tcb, value.1)?;
-        Ok(Self {
-            reported_tcb,
-            mask_id: value.0.mask_id,
-            ..Default::default()
-        })
     }
 }
 
@@ -506,6 +374,15 @@ mod tests {
     use super::*;
     use uuid::Uuid;
 
+    #[cfg(all(feature = "platform", feature = "snp"))]
+    use crate::firmware::host::types::SnpSetConfig;
+
+    #[cfg(all(feature = "platform", feature = "snp"))]
+    use std::convert::TryInto;
+
+    #[cfg(feature = "platform")]
+    use crate::firmware::host::types::SnpPlatformStatus as FfiSnpPlatformStatus;
+
     #[test]
     fn test_snp_platform_status_flags_zeroed() {
         let actual: SnpPlatformStatusFlags = SnpPlatformStatusFlags(0);
@@ -598,7 +475,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "snp")]
+    #[cfg(all(feature = "platform", feature = "snp"))]
     fn test_config() {
         let tcb = TcbVersion::new(None, 1, 2, 3, 4);
         let mask = MaskId(0x3);
@@ -650,7 +527,7 @@ mod tests {
 
     // MaskId Tests
     #[test]
-    #[cfg(feature = "snp")]
+    #[cfg(all(feature = "platform", feature = "snp"))]
     fn test_config_conversions() {
         let tcb = TcbVersion::new(None, 1, 2, 3, 4);
         let mask = MaskId(0x3);
@@ -682,7 +559,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "snp")]
+    #[cfg(all(feature = "platform", feature = "snp"))]
     fn test_config_error_cases() {
         let tcb = TcbVersion::new(None, 255, 255, 255, 255);
         let mask = MaskId(u32::MAX);
@@ -698,7 +575,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "snp")]
+    #[cfg(all(feature = "platform", feature = "snp"))]
     fn test_config_edge_cases() {
         // Test with maximum values
         let tcb = TcbVersion::new(Some(255), 255, 255, 255, 255);
@@ -740,7 +617,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "snp")]
+    #[cfg(all(feature = "platform", feature = "snp"))]
     fn test_different_generation_conversions() {
         let tcb = TcbVersion::new(Some(1), 2, 3, 4, 5);
         let mask_id = MaskId(0x3);
@@ -1036,6 +913,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "platform")]
     fn test_snp_platform_status_non_turin() {
         let expected: SnpPlatformStatus = SnpPlatformStatus {
             version: (1, 1),
@@ -1059,7 +937,7 @@ mod tests {
                 microcode: 1,
             },
         };
-        let raw_actual: FFI::types::SnpPlatformStatus = FFI::types::SnpPlatformStatus {
+        let raw_actual: FfiSnpPlatformStatus = FfiSnpPlatformStatus {
             buffer: [
                 1, 1, 1, 1, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, // Other stuff
                 1, 1, 0, 0, 0, 0, 1, 1, //Platform TCB
@@ -1072,6 +950,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "platform")]
     fn test_snp_platform_status_turin() {
         let expected: SnpPlatformStatus = SnpPlatformStatus {
             version: (1, 1),
@@ -1095,7 +974,7 @@ mod tests {
                 microcode: 1,
             },
         };
-        let raw_actual: FFI::types::SnpPlatformStatus = FFI::types::SnpPlatformStatus {
+        let raw_actual: FfiSnpPlatformStatus = FfiSnpPlatformStatus {
             buffer: [
                 1, 1, 1, 1, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, // Other stuff
                 1, 1, 1, 1, 0, 0, 0, 1, //Platform TCB

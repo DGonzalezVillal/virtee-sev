@@ -6,10 +6,9 @@ use crate::error::*;
 use crate::types::snp::DerivedKey;
 
 #[cfg(target_os = "linux")]
-use crate::firmware::{
-    guest::{ioctl::*, types::*},
-    host as HostFFI,
-};
+use crate::firmware::guest::{ioctl::*, types::*};
+#[cfg(target_os = "linux")]
+use crate::types::snp::cert_table::KernelCertTableEntry;
 use crate::types::snp::platform::CertTableEntry;
 
 #[cfg(target_os = "linux")]
@@ -133,10 +132,10 @@ impl Firmware {
         let mut certificates: Vec<CertTableEntry>;
 
         unsafe {
-            let entries = (ext_report_request.certs_address as *mut HostFFI::types::CertTableEntry)
+            let entries = (ext_report_request.certs_address as *mut KernelCertTableEntry)
                 .as_mut()
                 .ok_or(CertError::EmptyCertBuffer)?;
-            certificates = HostFFI::types::CertTableEntry::parse_table(entries)?;
+            certificates = unsafe { KernelCertTableEntry::parse_table(entries)? };
             certificates.sort();
         }
 

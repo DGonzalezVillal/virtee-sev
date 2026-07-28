@@ -13,7 +13,7 @@ use crate::error::*;
 #[cfg(target_os = "linux")]
 use crate::firmware::host::{
     ioctl::*,
-    types::{SnpCommit, SnpPlatformStatus as FFISnpPlatformStatus, SnpSetConfig},
+    types::{SnpCommit, SnpPlatformStatus as FFISnpPlatformStatus, SnpSetConfig, SnpVlekLoad, WrappedVlekHashstick as FFIWrappedVlekHashstick},
 };
 
 #[cfg(target_os = "linux")]
@@ -23,7 +23,33 @@ use crate::parser::ByteParser;
 use crate::types::primitives::Generation;
 
 #[cfg(target_os = "linux")]
-use std::convert::TryInto;
+use std::convert::{TryFrom, TryInto};
+
+#[cfg(target_os = "linux")]
+impl TryFrom<(Config, Generation)> for SnpSetConfig {
+    type Error = std::io::Error;
+
+    fn try_from(args: (Config, Generation)) -> Result<Self, Self::Error> {
+        let (value, generation) = args;
+        Ok(SnpSetConfig::new(
+            value.reported_tcb.to_bytes_with(generation)?,
+            value.mask_id,
+        ))
+    }
+}
+
+#[cfg(target_os = "linux")]
+impl TryFrom<(SnpSetConfig, Generation)> for Config {
+    type Error = std::io::Error;
+
+    fn try_from(value: (SnpSetConfig, Generation)) -> Result<Self, Self::Error> {
+        let (config, generation) = value;
+        Ok(Config::new(
+            crate::types::snp::TcbVersion::from_bytes_with(&config.reported_tcb, generation)?,
+            config.mask_id,
+        ))
+    }
+}
 
 #[cfg(target_os = "linux")]
 impl Firmware {
@@ -88,11 +114,6 @@ impl Firmware {
         hashstick: WrappedVlekHashstick,
         generation: Generation,
     ) -> Result<(), UserApiError> {
-        use std::convert::TryFrom;
-
-        use crate::firmware::host as FFI;
-        use FFI::types::{SnpVlekLoad, WrappedVlekHashstick as FFIWrappedVlekHashstick};
-
         let buffer = hashstick.to_bytes_with(generation)?;
 
         let parsed_bytes: FFIWrappedVlekHashstick =
