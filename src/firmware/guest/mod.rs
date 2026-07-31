@@ -7,6 +7,8 @@
 //! [`crate::attestation::attester`].
 
 #[cfg(target_os = "linux")]
+pub(crate) mod cert_table;
+#[cfg(target_os = "linux")]
 pub(crate) mod ioctl;
 #[cfg(target_os = "linux")]
 pub(crate) mod types;

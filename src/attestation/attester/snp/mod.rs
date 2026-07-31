@@ -6,9 +6,7 @@ use crate::error::*;
 use crate::types::snp::DerivedKey;
 
 #[cfg(target_os = "linux")]
-use crate::firmware::guest::{ioctl::*, types::*};
-#[cfg(target_os = "linux")]
-use crate::types::snp::cert_table::KernelCertTableEntry;
+use crate::firmware::guest::{cert_table::KernelCertTableEntry, ioctl::*, types::*};
 use crate::types::snp::platform::CertTableEntry;
 
 #[cfg(target_os = "linux")]
@@ -135,7 +133,7 @@ impl Firmware {
             let entries = (ext_report_request.certs_address as *mut KernelCertTableEntry)
                 .as_mut()
                 .ok_or(CertError::EmptyCertBuffer)?;
-            certificates = unsafe { KernelCertTableEntry::parse_table(entries)? };
+            certificates = KernelCertTableEntry::parse_table(entries)?;
             certificates.sort();
         }
 

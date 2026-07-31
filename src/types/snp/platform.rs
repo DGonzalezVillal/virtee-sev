@@ -6,7 +6,7 @@ pub use super::cert_table::{CertTableEntry, RawData};
 
 use crate::{
     parser::{ByteParser, Decoder, Encoder},
-    types::primitives::Generation,
+    types::shared::primitives::Generation,
     util::{
         hexline::HexLine,
         parser_helper::{ReadExt, WriteExt},
@@ -458,16 +458,18 @@ mod tests {
         assert_eq!(entry.data(), &large_data);
     }
 
-    #[cfg(target_os = "linux")]
+    #[cfg(all(target_os = "linux", feature = "attester"))]
     #[test]
     fn test_cert_table_conversion() {
+        use crate::firmware::guest::cert_table::KernelCertTableEntry;
+
         let entries = vec![
             CertTableEntry::new(CertType::ARK, vec![1, 2, 3]),
             CertTableEntry::new(CertType::ASK, vec![4, 5, 6]),
         ];
 
-        let bytes = CertTableEntry::cert_table_to_vec_bytes(&entries).unwrap();
-        let converted = CertTableEntry::vec_bytes_to_cert_table(&mut bytes.clone()).unwrap();
+        let mut bytes = KernelCertTableEntry::cert_table_to_vec_bytes(&entries).unwrap();
+        let converted = KernelCertTableEntry::vec_bytes_to_cert_table(&mut bytes).unwrap();
 
         assert_eq!(entries.len(), converted.len());
         assert_eq!(entries[0].cert_type, converted[0].cert_type);
@@ -872,15 +874,17 @@ mod tests {
     }
 
     #[test]
-    #[cfg(target_os = "linux")]
+    #[cfg(all(target_os = "linux", feature = "attester"))]
     fn test_chain_visitor_methods() {
+        use crate::firmware::guest::cert_table::KernelCertTableEntry;
+
         // Test sequence visiting
         let chain_data = vec![
             CertTableEntry::new(CertType::ARK, vec![1]),
             CertTableEntry::new(CertType::ASK, vec![2]),
         ];
-        let mut serialized = CertTableEntry::cert_table_to_vec_bytes(&chain_data).unwrap();
-        let deserialized = CertTableEntry::vec_bytes_to_cert_table(&mut serialized).unwrap();
+        let mut serialized = KernelCertTableEntry::cert_table_to_vec_bytes(&chain_data).unwrap();
+        let deserialized = KernelCertTableEntry::vec_bytes_to_cert_table(&mut serialized).unwrap();
 
         assert_eq!(deserialized.len(), chain_data.len());
         assert_eq!(deserialized[0].cert_type, chain_data[0].cert_type);

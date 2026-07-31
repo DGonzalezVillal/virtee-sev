@@ -81,7 +81,7 @@ All notable changes to this project will be documented in this file.
   and `crypto-rust` instead.
 - Guest firmware ioctls (`firmware::guest`) compile only with `attester`.
 - SNP platform APIs take [`Generation`] explicitly instead of auto-detecting via
-  CPUID. [`Generation::identify_host_generation`](crate::types::primitives::Generation::identify_host_generation)
+  CPUID. [`Generation::identify_host_generation`](crate::types::shared::primitives::Generation::identify_host_generation)
   remains available on Linux x86_64 as an optional helper.
 - Moved `PlatformInfo` and `KeyInfo` to `attestation::evidence::snp::fields`.
   These are grouped report-body parsing views, not standalone SNP ABI types.
