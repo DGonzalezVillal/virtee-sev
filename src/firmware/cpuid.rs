@@ -2,7 +2,7 @@
 
 //! Host-side CPUID helpers for identifying the local EPYC generation.
 
-use crate::types::primitives::generation::Generation;
+use crate::types::shared::primitives::Generation;
 
 use std::convert::TryInto;
 

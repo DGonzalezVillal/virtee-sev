@@ -29,7 +29,7 @@ use std::convert::TryFrom;
 /// use std::convert::TryFrom;
 /// use sev::attestation::endorser::sev::Usage;
 /// use sev::platform::Firmware;
-/// use sev::types::primitives::Generation;
+/// use sev::types::shared::primitives::Generation;
 ///
 /// let mut firmware = Firmware::open().expect("failed to open /dev/sev");
 ///

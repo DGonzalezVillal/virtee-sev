@@ -6,9 +6,6 @@
 pub mod shared;
 
 #[cfg(any(feature = "sev", feature = "snp"))]
-pub mod primitives;
-
-#[cfg(any(feature = "sev", feature = "snp"))]
 pub mod sev;
 
 #[cfg(feature = "snp")]

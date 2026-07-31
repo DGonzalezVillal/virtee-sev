@@ -2,7 +2,7 @@
 
 use crate::{
     parser::{ByteParser, Decoder, Encoder},
-    types::primitives::Generation,
+    types::shared::primitives::Generation,
     util::parser_helper::{validate_reserved, ReadExt, WriteExt},
 };
 use std::{

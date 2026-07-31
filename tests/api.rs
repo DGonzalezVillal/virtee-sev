@@ -115,7 +115,7 @@ mod sev {
 mod snp {
     use serial_test::serial;
     use sev::platform::{snp::{Config, MaskId, SnpPlatformStatus, TcbVersion}, Firmware};
-    use sev::types::primitives::Generation;
+    use sev::types::shared::primitives::Generation;
 
     fn host_generation() -> Generation {
         #[cfg(all(target_arch = "x86_64", feature = "snp"))]

@@ -20,7 +20,7 @@ use crate::firmware::host::{
 use crate::parser::ByteParser;
 
 #[cfg(target_os = "linux")]
-use crate::types::primitives::Generation;
+use crate::types::shared::primitives::Generation;
 
 #[cfg(target_os = "linux")]
 use std::convert::{TryFrom, TryInto};

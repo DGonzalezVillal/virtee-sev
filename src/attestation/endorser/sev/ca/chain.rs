@@ -42,31 +42,31 @@ impl Encoder<()> for Chain {
     }
 }
 
-impl From<crate::types::primitives::Generation> for Chain {
-    fn from(generation: crate::types::primitives::Generation) -> Self {
+impl From<crate::types::shared::primitives::Generation> for Chain {
+    fn from(generation: crate::types::shared::primitives::Generation) -> Self {
         let (ark, ask) = match generation {
             #[cfg(feature = "sev")]
-            crate::types::primitives::Generation::Naples => {
+            crate::types::shared::primitives::Generation::Naples => {
                 (super::super::builtin::naples::ARK, super::super::builtin::naples::ASK)
             }
             #[cfg(feature = "sev")]
-            crate::types::primitives::Generation::Rome => {
+            crate::types::shared::primitives::Generation::Rome => {
                 (super::super::builtin::rome::ARK, super::super::builtin::rome::ASK)
             }
             #[cfg(any(feature = "sev", feature = "snp"))]
-            crate::types::primitives::Generation::Milan => {
+            crate::types::shared::primitives::Generation::Milan => {
                 (super::super::builtin::milan::ARK, super::super::builtin::milan::ASK)
             }
             #[cfg(any(feature = "sev", feature = "snp"))]
-            crate::types::primitives::Generation::Genoa => {
+            crate::types::shared::primitives::Generation::Genoa => {
                 (super::super::builtin::genoa::ARK, super::super::builtin::genoa::ASK)
             }
             #[cfg(any(feature = "sev", feature = "snp"))]
-            crate::types::primitives::Generation::Turin => {
+            crate::types::shared::primitives::Generation::Turin => {
                 (super::super::builtin::turin::ARK, super::super::builtin::turin::ASK)
             }
             #[cfg(any(feature = "sev", feature = "snp"))]
-            crate::types::primitives::Generation::Venice => {
+            crate::types::shared::primitives::Generation::Venice => {
                 panic!("Venice SEV CA chain is not yet implemented")
             }
         };

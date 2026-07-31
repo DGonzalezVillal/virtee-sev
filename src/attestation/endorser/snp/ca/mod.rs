@@ -121,22 +121,22 @@ impl Chain {
     not(feature = "sev"),
     any(feature = "crypto-openssl", feature = "crypto-rust")
 ))]
-impl From<crate::types::primitives::Generation> for Chain {
-    fn from(gen: crate::types::primitives::Generation) -> Self {
+impl From<crate::types::shared::primitives::Generation> for Chain {
+    fn from(gen: crate::types::shared::primitives::Generation) -> Self {
         let (ark, ask) = match gen {
-            crate::types::primitives::Generation::Milan => (
+            crate::types::shared::primitives::Generation::Milan => (
                 super::builtin::milan::ark().unwrap(),
                 super::builtin::milan::ask().unwrap(),
             ),
-            crate::types::primitives::Generation::Genoa => (
+            crate::types::shared::primitives::Generation::Genoa => (
                 super::builtin::genoa::ark().unwrap(),
                 super::builtin::genoa::ask().unwrap(),
             ),
-            crate::types::primitives::Generation::Turin => (
+            crate::types::shared::primitives::Generation::Turin => (
                 super::builtin::turin::ark().unwrap(),
                 super::builtin::turin::ask().unwrap(),
             ),
-            crate::types::primitives::Generation::Venice => {
+            crate::types::shared::primitives::Generation::Venice => {
                 panic!("Venice SNP CA chain is not yet implemented")
             }
             #[cfg(feature = "sev")]

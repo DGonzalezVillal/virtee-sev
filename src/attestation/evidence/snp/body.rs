@@ -3,7 +3,7 @@
 use crate::{
     attestation::evidence::snp::SignatureAlgorithm,
     parser::Decoder,
-    types::primitives::Generation,
+    types::shared::primitives::Generation,
     types::shared::primitives::FirmwareVersion,
     types::snp::{GuestPolicy, TcbVersion},
     util::{hexline::HexLine, parser_helper::validate_reserved},
