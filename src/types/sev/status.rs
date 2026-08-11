@@ -1,7 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
+//! First-generation SEV platform status and version types.
+//!
+//! Populated by [`crate::platform::Firmware::platform_status`] when the `platform`
+//! and `sev` features are enabled. For the SNP equivalents see
+//! [`crate::types::snp::platform`].
+
 use super::State;
-use crate::types::shared::primitives::FirmwareVersion;
+use crate::types::shared::FirmwareVersion;
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -22,7 +28,7 @@ bitflags::bitflags! {
 ///
 /// Used in ioctl layouts and certificate bodies where the build number is
 /// stored separately. For the full major/minor/build triple, use
-/// [`FirmwareVersion`](crate::types::shared::primitives::FirmwareVersion).
+/// [`FirmwareVersion`](crate::types::shared::FirmwareVersion).
 #[repr(C)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
@@ -55,7 +61,10 @@ impl From<(Version, u8)> for FirmwareVersion {
     }
 }
 
-/// Information regarding the SEV platform's current status.
+/// High-level SEV platform status returned by [`crate::platform::Firmware::platform_status`].
+///
+/// Combines firmware version, lifecycle [`State`], ownership/encrypted-state
+/// [`PlatformStatusFlags`], and the number of active guests.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Status {
     /// The firmware version (major, minor, build).

@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
+//! SNP certificate table GUIDs (`CertType`).
+//!
+//! GUID values match the AMD SEV-SNP certificate table specification. Unknown
+//! GUIDs are represented as [`CertType::OTHER`].
+
 use crate::{
     parser::{ByteParser, Decoder, Encoder},
     util::parser_helper::{ReadExt, WriteExt},
@@ -13,10 +18,14 @@ use std::{
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
+/// Certificate type GUID for SNP certificate table entries.
+///
+/// Standard entries (ARK, ASK, VCEK, VLEK, CRL) use fixed AMD GUIDs.
+/// [`CertType::Empty`] terminates a kernel cert table. Custom vendor entries
+/// use [`CertType::OTHER`].
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 #[repr(C)]
-/// Certificates which are accepted for cert table entries.
 pub enum CertType {
     /// Empty or closing entry for the CertTable
     #[default]

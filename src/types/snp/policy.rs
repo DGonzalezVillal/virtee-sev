@@ -1,6 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::types::shared::primitives::FirmwareVersion;
+//! SNP guest policy bitfield set at launch.
+//!
+//! [`GuestPolicy`] is bound to a guest for its lifetime and enforced by the
+//! firmware on every migration. It appears in the ID block, attestation reports,
+//! and launch reference measurements. Reserved-bit validation is
+//! [`FirmwareVersion`](crate::types::shared::FirmwareVersion)-aware.
+
+use crate::types::shared::FirmwareVersion;
 use crate::{
     parser::{ByteParser, Decoder, Encoder},
     util::parser_helper::{ReadExt, WriteExt},
@@ -46,7 +53,7 @@ bitfield! {
     impl Debug;
     /// ABI_MINOR field: Indicates the minor API version.
     pub abi_minor, set_abi_minor: 7, 0;
-    /// ABI_MAJOR field: Indicates the minor API version.
+    /// ABI_MAJOR field: minimum major ABI version required for this guest.
     pub abi_major, set_abi_major: 15, 8;
     /// SMT_ALLOWED field: Indicates the if SMT should be permitted.
     pub smt_allowed, set_smt_allowed: 16;

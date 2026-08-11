@@ -6,7 +6,11 @@
 //! Enable individual role features (`evidence`, `verifier`, `endorser`,
 //! `attester`, `reference`) to compile only the attestation surface you need.
 
-#[cfg(all(feature = "attester", target_os = "linux", any(feature = "sev", feature = "snp")))]
+#[cfg(all(
+    feature = "attester",
+    target_os = "linux",
+    any(feature = "sev", feature = "snp")
+))]
 pub mod attester;
 
 #[cfg(all(feature = "evidence", any(feature = "sev", feature = "snp")))]
@@ -52,10 +56,9 @@ pub mod verifier;
 pub use verifier::Verifiable;
 
 #[cfg(all(feature = "evidence", feature = "snp"))]
-pub use evidence::snp::{KeyInfo, PlatformInfo, Report, ReportBody, ReportVariant, Signature, SignatureAlgorithm};
+pub use evidence::snp::{
+    KeyInfo, PlatformInfo, Report, ReportBody, ReportVariant, Signature, SignatureAlgorithm,
+};
 
 #[cfg(all(feature = "evidence", feature = "sev", feature = "crypto-openssl"))]
 pub use evidence::sev::LegacyAttestationReport;
-
-#[cfg(all(feature = "attester", target_os = "linux", feature = "snp"))]
-pub use attester::Firmware;

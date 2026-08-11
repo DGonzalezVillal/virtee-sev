@@ -1,5 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
+//! X.509 certificate signature verification (pure-Rust backend).
+//!
+//! Implements [`Verifiable`](crate::attestation::verifier::Verifiable) for
+//! `(signer, signee)` certificate pairs using `x509-cert`, `rsa`, and `sha2`.
+//! This is the building block for chain verification in [`super::chain`].
+//!
+//! Currently supports RSA-PSS with SHA-384, matching AMD SNP certificate chains.
+
 use crate::attestation::endorser::snp::Certificate;
 use crate::attestation::verifier::Verifiable;
 
@@ -12,7 +20,13 @@ use x509_cert::spki::ObjectIdentifier;
 
 const RSA_SSA_PSS_OID: ObjectIdentifier = ObjectIdentifier::new_unwrap("1.2.840.113549.1.1.10");
 
-/// Verify if the public key of one Certificate signs another Certificate.
+/// Verify that one certificate's public key signed another certificate.
+///
+/// `self.0` is the **signer** (issuer) and `self.1` is the **signee** (subject).
+/// The signee's TBS certificate is hashed and checked against the signer's RSA
+/// public key using RSASSA-PSS with SHA-384.
+///
+/// Returns an error if the signee uses an unsupported signature algorithm.
 impl Verifiable for (&Certificate, &Certificate) {
     type Output = ();
 

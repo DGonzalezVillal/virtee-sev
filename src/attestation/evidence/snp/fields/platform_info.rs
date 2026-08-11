@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::types::shared::primitives::FirmwareVersion;
 use crate::{
     parser::{ByteParser, Decoder, Encoder},
+    types::shared::FirmwareVersion,
     util::parser_helper::{ReadExt, WriteExt},
 };
+
 use std::{
     fmt::Display,
     io::{Read, Write},

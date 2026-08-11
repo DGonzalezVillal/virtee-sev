@@ -1,5 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
+//! SNP ID block wire layout.
+//!
+//! Fixed-size block submitted at guest launch. The
+//! [`launch_digest`](IdBlock::launch_digest) field is the expected guest
+//! measurement (48-byte SHA-384) that must match the attestation report.
+
 use super::{DEFAULT_ID_POLICY, DEFAULT_ID_VERSION, ids::{FamilyId, ImageId}};
 use crate::{
     error::IdBlockError,

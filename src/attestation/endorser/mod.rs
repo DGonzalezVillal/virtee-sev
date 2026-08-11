@@ -1,15 +1,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
-//! RATS Endorser role: endorsement material for attestation.
+//! Endorser: endorsement material for attestation verification.
+//!
+//! SNP certificate chains are in [`snp`](self::snp). Legacy SEV chains are in
+//! [`sev`](self::sev) (OpenSSL only).
 
-#[cfg(all(feature = "snp", any(feature = "crypto-openssl", feature = "crypto-rust")))]
+#[cfg(all(
+    feature = "snp",
+    any(feature = "crypto-openssl", feature = "crypto-rust")
+))]
 pub mod snp;
 
 #[cfg(all(feature = "sev", feature = "crypto-openssl"))]
 pub mod sev;
-
-#[cfg(all(feature = "snp", any(feature = "crypto-openssl", feature = "crypto-rust")))]
-pub use snp::{Certificate, Chain};
-
-#[cfg(all(feature = "sev", feature = "crypto-openssl"))]
-pub use sev::{Chain as SevChain, PrivateKey, Signer, Usage};

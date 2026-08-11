@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
+//! Chip-ID and VCEK masking flags for SNP platform configuration.
+//!
+//! [`MaskId`] is written through `SNP_SET_CONFIG` to control whether
+//! attestation reports zero the chip ID and/or use VLEK instead of VCEK.
+
 use crate::{
     parser::{ByteParser, Decoder, Encoder},
     util::parser_helper::{ReadExt, WriteExt},

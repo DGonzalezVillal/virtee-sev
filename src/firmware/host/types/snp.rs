@@ -1,6 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
-//! SNP host ioctl argument layouts.
+//! SNP host ioctl payload layouts.
+//!
+//! Structures for SEV-SNP platform management ioctls: status query, TCB commit,
+//! system configuration, and VLEK hashstick loading.
+//!
+//! Public wrappers are in [`crate::platform::snp`]. Decoded wire types live in
+//! [`crate::types::snp`].
 
 use std::{
     convert::TryFrom,
@@ -9,21 +15,26 @@ use std::{
 
 use crate::{error::HashstickError, types::snp::MaskId};
 
-/// Expected length for the VLEK hashstick ioctl buffer.
+/// Expected byte length of a VLEK hashstick ioctl buffer.
 pub const HASHSTICK_BUFFER_LEN: usize = 432;
 
-/// SNP_COMMIT structure
+/// Payload for the `SNP_COMMIT` ioctl.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Default)]
 #[repr(C, packed)]
 pub struct SnpCommit {
+    /// Reserved buffer field (must be zero).
     pub buffer: u32,
 }
 
-/// Sets the system wide configuration values for SNP.
+/// Payload for the `SNP_SET_CONFIG` ioctl.
+///
+/// Sets the reported TCB version and mask ID used in attestation reports.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[repr(C, packed)]
 pub struct SnpSetConfig {
+    /// Reported TCB version bytes written to attestation reports.
     pub reported_tcb: [u8; 8],
+    /// Platform mask identifier.
     pub mask_id: MaskId,
     reserved: [u8; 52],
 }
@@ -39,7 +50,7 @@ impl Default for SnpSetConfig {
 }
 
 impl SnpSetConfig {
-    /// Creates an ioctl payload from reported TCB bytes and a mask ID.
+    /// Build a set-config payload from reported TCB bytes and a mask ID.
     pub fn new(reported_tcb: [u8; 8], mask_id: MaskId) -> Self {
         Self {
             reported_tcb,
@@ -49,10 +60,14 @@ impl SnpSetConfig {
     }
 }
 
-/// Wrapped VLEK hashstick bytes passed to SNP_VLEK_LOAD.
+/// Validated VLEK hashstick bytes for `SNP_VLEK_LOAD`.
+///
+/// Enforces buffer length and reserved-field constraints before the ioctl
+/// payload is constructed.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[repr(C, packed)]
 pub struct WrappedVlekHashstick {
+    /// 432-byte wrapped hashstick from AMD.
     pub data: [u8; HASHSTICK_BUFFER_LEN],
 }
 
@@ -83,17 +98,21 @@ impl TryFrom<&[u8]> for WrappedVlekHashstick {
     }
 }
 
-/// Structure used to load a VLEK hashstick into the AMD Secure Processor.
+/// Payload for the `SNP_VLEK_LOAD` ioctl.
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 #[repr(C, packed)]
 pub struct SnpVlekLoad {
+    /// Size of this structure.
     pub len: u32,
+    /// Wrapped hashstick format version.
     pub vlek_wrapped_version: u8,
     _reserved: [u8; 3],
+    /// Host-virtual address of a [`WrappedVlekHashstick`].
     pub vlek_wrapped_address: u64,
 }
 
 impl SnpVlekLoad {
+    /// Build a VLEK load payload from a validated hashstick.
     pub fn new(hashstick: &WrappedVlekHashstick) -> Self {
         hashstick.into()
     }
@@ -110,7 +129,10 @@ impl From<&WrappedVlekHashstick> for SnpVlekLoad {
     }
 }
 
-/// Kernel SNP platform status ioctl buffer.
+/// Raw 32-byte buffer returned by the `SNP_PLATFORM_STATUS` ioctl.
+///
+/// Decode with [`crate::platform::Firmware::snp_platform_status`] using an
+/// explicit [`Generation`](crate::types::shared::Generation).
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 #[repr(C, packed)]
 pub struct SnpPlatformStatus {

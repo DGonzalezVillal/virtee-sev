@@ -1,14 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
-//! AMD's Naples certificates.
+//! AMD Genoa ARK and ASK certificates.
 //!
-//! Certificate provenance: <https://developer.amd.com/wp-content/resources/ask_ark_naples.cert>
-//!
-//! For convenience, the certificate chain has been split into individual
-//! certificates and are embedded here as byte slices.
+//! Provenance: <https://developer.amd.com/wp-content/resources/ask_ark_genoa.cert>
 
-/// The public Naples ARK certificate.
+/// The public Genoa ARK certificate.
 pub const ARK: &[u8] = include_bytes!("ark.cert");
 
-/// The public Naples ASK certificate.
+/// The public Genoa ASK certificate.
 pub const ASK: &[u8] = include_bytes!("ask.cert");

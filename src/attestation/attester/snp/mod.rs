@@ -1,21 +1,68 @@
 // SPDX-License-Identifier: Apache-2.0
 
-//! SNP guest attester: request attestation reports from `/dev/sev-guest`.
+//! SNP guest attester: collect evidence from `/dev/sev-guest`.
+//!
+//! This module implements the RATS **Attester** role for SEV-SNP guests. A
+//! guest VM uses [`Firmware`] to request attestation reports, extended reports
+//! (with certificate tables), and derived keys from the AMD Secure Processor
+//! (ASP). The bytes returned here are **evidence** — they are not verified in
+//! this module.
+//!
+//! # Attestation flow
+//!
+//! ```text
+//!  Guest VM                         Verifier (separate role)
+//!  ─────────                        ────────────────────────
+//!  Firmware::open()
+//!       │
+//!       ├─ get_report() ──► raw report bytes ──► Report::from_bytes()
+//!       │                                          │
+//!       ├─ get_ext_report() ──► report + cert table ──► Chain::from_cert_table_*()
+//!       │                                          │
+//!       └─ get_derived_key() ──► 32-byte key      └─► Verifiable + ReportBody
+//! ```
+//!
+//! Typical downstream steps (see [`crate::attestation::verifier`] and
+//! [`crate::attestation::evidence::snp`]):
+//!
+//! 1. Frame the report with [`Report::from_bytes`](crate::attestation::evidence::snp::Report::from_bytes).
+//! 2. Obtain endorsement material from [`crate::attestation::endorser::snp`]
+//!    (built-in roots, host-exported cert table, or files).
+//! 3. Verify the report signature and parse fields with
+//!    [`ReportBody::try_from`](crate::attestation::evidence::snp::ReportBody).
+//!
+//! # API summary
+//!
+//! | Method | Purpose |
+//! |--------|---------|
+//! | [`Firmware::open`] | Open `/dev/sev-guest` |
+//! | [`Firmware::get_report`] | Standard 1184-byte attestation report |
+//! | [`Firmware::get_ext_report`] | Report plus optional firmware certificate table |
+//! | [`Firmware::get_derived_key`] | Guest-derived key (vCPU-secrets, etc.) |
+//!
+//! # Platform requirements
+//!
+//! - Linux guest with the `sev-guest` kernel module and `/dev/sev-guest` device node
+//! - `attester` and `snp` crate features enabled
+//! - Guest must be running under an SNP-enabled hypervisor
+//!
+//! # Errors
+//!
+//! Ioctl failures are mapped to [`UserApiError`](crate::error::UserApiError),
+//! distinguishing VMM errors (upper 32 bits of firmware status) from ASP/firmware
+//! errors (lower 32 bits). Non-zero response status fields also surface as
+//! [`FirmwareError`](crate::error::FirmwareError).
 
 use crate::error::*;
-use crate::types::snp::DerivedKey;
+use crate::types::snp::{platform::CertTableEntry, DerivedKey};
 
 #[cfg(target_os = "linux")]
 use crate::firmware::guest::{cert_table::KernelCertTableEntry, ioctl::*, types::*};
-use crate::types::snp::platform::CertTableEntry;
 
 #[cfg(target_os = "linux")]
 use std::fs::{File, OpenOptions};
 
-/// Checks the `fw_err` field on the
-/// [`GuestRequest`](crate::firmware::guest::ioctl::GuestRequest) structure
-/// to make sure that no errors were encountered by the VMM or the AMD Secure
-/// Processor.
+/// Map the firmware error word from a guest ioctl into a user-facing error.
 fn map_fw_err(raw_error: RawFwError) -> UserApiError {
     let (upper, lower): (u32, u32) = raw_error.into();
 
@@ -32,9 +79,12 @@ fn map_fw_err(raw_error: RawFwError) -> UserApiError {
 
 /// SNP guest firmware handle backed by the `/dev/sev-guest` device node.
 ///
-/// This is the RATS Attester role for SEV-SNP guests: it requests attestation
-/// reports and derived keys from the AMD Secure Processor. For verification and
-/// appraisal, see [`crate::attestation::verifier`].
+/// Primary attester interface for SEV-SNP guests. Obtain with [`Self::open`],
+/// then call [`Self::get_report`], [`Self::get_ext_report`], or
+/// [`Self::get_derived_key`].
+///
+/// For verification and appraisal of returned bytes, use
+/// [`crate::attestation::verifier`].
 #[cfg(target_os = "linux")]
 #[derive(Debug)]
 pub struct Firmware(File);
@@ -42,14 +92,35 @@ pub struct Firmware(File);
 #[cfg(target_os = "linux")]
 impl Firmware {
     /// Open a handle to the SEV-SNP guest device at `/dev/sev-guest`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`std::io::Error`] if the device node is missing or cannot be
+    /// opened (for example, the guest is not SNP-enabled or the driver is not loaded).
     pub fn open() -> std::io::Result<Self> {
-        Ok(Self(
-            OpenOptions::new().read(true).open("/dev/sev-guest")?,
-        ))
+        Ok(Self(OpenOptions::new().read(true).open("/dev/sev-guest")?))
     }
 
-    /// Requests an attestation report from the AMD Secure Processor. The
-    /// `message_version` will default to `1` if `None` is specified.
+    /// Request a standard attestation report from the ASP.
+    ///
+    /// Returns the raw 1184-byte report blob. Parse it with
+    /// [`Report::from_bytes`](crate::attestation::evidence::snp::Report::from_bytes);
+    /// do not interpret body fields before verification.
+    ///
+    /// # Arguments
+    ///
+    /// * `message_version` — guest–firmware protocol version; defaults to `1`.
+    /// * `data` — optional 64-byte guest-provided report data (defaults to zeros).
+    /// * `vmpl` — Virtual Machine Privilege Level; defaults to `0`.
+    ///
+    /// # Returns
+    ///
+    /// Raw attestation report bytes (`Report::REPORT_LEN` = 1184).
+    ///
+    /// # Errors
+    ///
+    /// [`UserApiError`](crate::error::UserApiError) on ioctl failure, firmware
+    /// status errors, or invalid request parameters.
     pub fn get_report(
         &mut self,
         message_version: Option<u32>,
@@ -73,11 +144,34 @@ impl Firmware {
         Ok(response.report.to_vec())
     }
 
-    /// Request an extended attestation report from the AMD Secure Processor.
-    /// The `message_version` will default to `1` if `None` is specified.
+    /// Request an extended attestation report and optional certificate table.
     ///
-    /// Behaves the same as [`Self::get_report`], but may also return a parsed
-    /// certificate table when the platform provides one.
+    /// Same report semantics as [`Self::get_report`], but the firmware may also
+    /// return a certificate table ([`CertTableEntry`](crate::types::snp::platform::CertTableEntry))
+    /// suitable for building a [`Chain`](crate::attestation::endorser::snp::Chain)
+    /// via [`Chain::from_cert_table_der`](crate::attestation::endorser::snp::Chain::from_cert_table_der)
+    /// or [`Chain::from_cert_table_pem`](crate::attestation::endorser::snp::Chain::from_cert_table_pem).
+    ///
+    /// # Arguments
+    ///
+    /// Same as [`Self::get_report`].
+    ///
+    /// # Returns
+    ///
+    /// A tuple of:
+    /// - raw attestation report bytes
+    /// - `Some(cert_table)` when the platform returned certificates, or `None`
+    ///
+    /// # Errors
+    ///
+    /// Same as [`Self::get_report`]. Certificate table parse failures return
+    /// [`CertError`](crate::error::CertError).
+    ///
+    /// # Notes
+    ///
+    /// Retries automatically when the VMM reports
+    /// [`VmmError::InvalidCertificatePageLength`](crate::error::VmmError::InvalidCertificatePageLength)
+    /// (pre-5.19 kernel quirk).
     pub fn get_ext_report(
         &mut self,
         message_version: Option<u32>,
@@ -140,8 +234,30 @@ impl Firmware {
         Ok((report_response.report.to_vec(), Some(certificates)))
     }
 
-    /// Fetches a derived key from the AMD Secure Processor. The `message_version`
-    /// will default to `2` if `None` is specified.
+    /// Request a guest-derived key from the ASP.
+    ///
+    /// Derives a 32-byte key bound to guest context (for example, vCPU secrets
+    /// or launch mitigation). Populate [`DerivedKey`] with the fields documented
+    /// in the SNP guest firmware ABI before calling.
+    ///
+    /// # Arguments
+    ///
+    /// * `message_version` — protocol version; defaults to `2`. Versions `>= 2`
+    ///   require [`DerivedKey::launch_mit_vector`] to be set.
+    /// * `derived_key_request` — key derivation parameters (guest field select,
+    ///   VMPL, root key select, etc.).
+    ///
+    /// # Returns
+    ///
+    /// 32-byte derived key material.
+    ///
+    /// # Errors
+    ///
+    /// [`UserApiError::IOError`](crate::error::UserApiError::IOError) with
+    /// [`InvalidInput`](std::io::ErrorKind::InvalidInput) when message version
+    /// `>= 2` is used without a launch mitigation vector. Other failures map
+    /// through [`UserApiError`](crate::error::UserApiError) like
+    /// [`Self::get_report`].
     pub fn get_derived_key(
         &mut self,
         message_version: Option<u32>,

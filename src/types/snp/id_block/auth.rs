@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
+//! SNP ID authentication block wire layout.
+//!
+//! Carries ECDSA P-384 signatures and public keys that authorize an
+//! [`IdBlock`](super::IdBlock). Submitted alongside the ID block at launch.
+
 use super::{ecdsa::{SevEcdsaPubKey, SevEcdsaSig}, DEFAULT_KEY_ALGO};
 use crate::{
     parser::{ByteParser, Decoder, Encoder},

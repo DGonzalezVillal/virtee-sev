@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
-//! EPYC processor generation identifiers.
+//! EPYC processor generation identifiers and CPUID helpers.
+//!
+//! [`Generation`] drives TCB layout selection, built-in certificate chain
+//! choice, and SNP platform ioctl decoding. On Linux x86_64 with the `snp`
+//! feature, [`Generation::identify_host_generation`] reads host CPUID.
 
 use std::convert::TryFrom;
 
@@ -20,33 +24,23 @@ use std::convert::TryFrom;
 /// ## Example
 ///
 /// ```no_run
-/// # #[cfg(all(feature = "crypto-openssl", feature = "sev"))]
-/// # {
-///
-/// // NOTE: The conversion traits require the `sev` crate to have the
-/// // `crypto-openssl` feature enabled.
-///
 /// use std::convert::TryFrom;
-/// use sev::attestation::endorser::sev::Usage;
-/// use sev::platform::Firmware;
-/// use sev::types::shared::primitives::Generation;
+/// use sev::types::shared::Generation;
 ///
-/// let mut firmware = Firmware::open().expect("failed to open /dev/sev");
+/// // Parse a generation name (available with `snp` and/or `sev` features).
+/// let generation = Generation::try_from("milan".to_string()).unwrap();
+/// assert_eq!(generation, Generation::Milan);
 ///
-/// let chain = firmware.pdh_cert_export()
-///     .expect("unable to export SEV certificates");
-///
-/// let _id = firmware.get_identifier().expect("error fetching identifier");
-///
-/// // NOTE: Requesting a signed CEK from AMD's KDS has been omitted for
-/// // brevity.
-///
-/// let generation = Generation::try_from(&chain).expect("not a SEV/ES chain");
-/// match generation {
-///     Generation::Naples => println!("Naples"),
-///     Generation::Rome => println!("Rome"),
-///     _ => {}
-/// }
+/// // Legacy SEV: infer generation from an exported platform certificate chain
+/// // (`sev`, `crypto-openssl`, and `platform` features required).
+/// # #[cfg(all(feature = "crypto-openssl", feature = "sev", feature = "platform"))]
+/// # {
+/// # use std::convert::TryFrom;
+/// # use sev::platform::Firmware;
+/// # let mut firmware = Firmware::open().unwrap();
+/// # let chain = firmware.pdh_cert_export().unwrap();
+/// # let generation = Generation::try_from(&chain).unwrap();
+/// # let _ = generation.titlecase();
 /// # }
 /// ```
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -76,11 +70,11 @@ pub enum Generation {
     Venice,
 }
 
-/// Type alias for the CPU family
+/// CPUID base/extended family byte used with [`Generation::identify_cpu`].
 #[cfg(feature = "snp")]
 pub type CpuFamily = u8;
 
-/// Type alias for the CPU model
+/// CPUID model byte used with [`Generation::identify_cpu`].
 #[cfg(feature = "snp")]
 pub type CpuModel = u8;
 

@@ -1,6 +1,47 @@
 // SPDX-License-Identifier: Apache-2.0
 
-//! SEV-SNP platform management.
+//! SEV-SNP host platform management.
+//!
+//! Extends [`crate::platform::Firmware`] with SNP-specific ioctls: platform
+//! status, TCB commit, system configuration, and VLEK hashstick loading.
+//! Wire types are re-exported from [`crate::types::snp::platform`].
+//!
+//! Requires the `snp` and `platform` features.
+//!
+//! # Generation parameter
+//!
+//! SNP platform status and configuration ioctls return or accept TCB bytes
+//! whose field layout varies by EPYC generation (Milan vs Turin, etc.). Every
+//! method that decodes or encodes TCB data requires an explicit
+//! [`Generation`](crate::types::shared::Generation). The library
+//! does not call [`crate::firmware::cpuid::identify_host_generation`] automatically.
+//!
+//! # API summary
+//!
+//! | Method | Purpose |
+//! |--------|---------|
+//! | [`Firmware::snp_platform_status`] | Query SNP platform status and TCB versions |
+//! | [`Firmware::snp_commit`] | Commit current firmware TCB/version to the platform |
+//! | [`Firmware::snp_set_config`] | Set reported TCB and chip-ID mask |
+//! | [`Firmware::snp_vlek_load`] | Load a VLEK hashstick for VLEK-based attestation |
+//!
+//! Shared ioctls ([`Firmware::get_identifier`], [`Firmware::platform_status`])
+//! are on the base [`crate::platform::Firmware`] impl in [`super`].
+//!
+//! # Typical workflow
+//!
+//! ```ignore
+//! use sev::platform::Firmware;
+//! use sev::types::shared::Generation;
+//! use sev::types::snp::platform::Config;
+//!
+//! let mut fw = Firmware::open()?;
+//! let generation = Generation::Turin;
+//!
+//! let status = fw.snp_platform_status(generation)?;
+//! fw.snp_set_config(Config::new(reported_tcb, mask_id), generation)?;
+//! fw.snp_commit()?;
+//! ```
 
 pub use crate::types::snp::platform::*;
 
@@ -20,7 +61,7 @@ use crate::firmware::host::{
 use crate::parser::ByteParser;
 
 #[cfg(target_os = "linux")]
-use crate::types::shared::primitives::Generation;
+use crate::types::shared::Generation;
 
 #[cfg(target_os = "linux")]
 use std::convert::{TryFrom, TryInto};
@@ -53,10 +94,16 @@ impl TryFrom<(SnpSetConfig, Generation)> for Config {
 
 #[cfg(target_os = "linux")]
 impl Firmware {
-    /// Query the SNP platform status.
+    /// Query SNP platform status and capabilities.
     ///
-    /// `generation` selects the TCB layout used to decode platform and reported
-    /// TCB versions in the response.
+    /// Decodes the 32-byte firmware response into [`SnpPlatformStatus`] using
+    /// `generation` to select the correct TCB field layout.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`UserApiError`](crate::error::UserApiError) on ioctl failure or
+    /// [`std::io::Error`] if the response bytes cannot be decoded for the given
+    /// generation.
     pub fn snp_platform_status(
         &mut self,
         generation: Generation,
@@ -75,11 +122,13 @@ impl Firmware {
         )?)
     }
 
-    /// The firmware will perform the following actions:
-    /// - Set the CommittedTCB to the CurrentTCB of the current firmware.
-    /// - Set the CommittedVersion to the FirmwareVersion of the current firmware.
-    /// - Sets the ReportedTCB to the CurrentTCB.
-    /// - Deletes the VLEK hashstick if the ReportedTCB changed.
+    /// Commit the current firmware TCB and version to the platform.
+    ///
+    /// The firmware will:
+    /// - set `CommittedTCB` to the current firmware TCB
+    /// - set `CommittedVersion` to the current firmware version
+    /// - set `ReportedTCB` to the current TCB
+    /// - delete the loaded VLEK hashstick if `ReportedTCB` changed
     pub fn snp_commit(&mut self) -> Result<(), UserApiError> {
         let mut buf: SnpCommit = Default::default();
         let mut cmd_buf = Command::from_mut(&mut buf);
@@ -91,7 +140,10 @@ impl Firmware {
         Ok(())
     }
 
-    /// Set the SNP Configuration.
+    /// Apply SNP platform configuration.
+    ///
+    /// Sets the reported TCB version (embedded in attestation reports) and the
+    /// chip-ID mask. Encodes `new_config` using `generation` for TCB layout.
     pub fn snp_set_config(
         &mut self,
         new_config: Config,
@@ -108,7 +160,12 @@ impl Firmware {
         Ok(())
     }
 
-    /// Insert a Version Loaded Endorsement Key Hashstick into the AMD Secure Processor.
+    /// Load a Versioned Loaded Endorsement Key (VLEK) hashstick.
+    ///
+    /// Enables VLEK-based attestation in place of per-chip VCEK. The hashstick
+    /// must conform to the wrapped format validated by
+    /// [`WrappedVlekHashstick`](crate::types::snp::platform::WrappedVlekHashstick)
+    /// (SNP firmware specification chapter 8.30).
     pub fn snp_vlek_load(
         &mut self,
         hashstick: WrappedVlekHashstick,

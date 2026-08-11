@@ -1,6 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! SNP launch digest (48-byte SHA-384 measurement) wire type.
+//!
+//! The **launch digest** is the guest's expected measurement at launch. It
+//! appears in the ID block ([`IdBlock`](crate::types::snp::IdBlock)), the
+//! attestation report body, and is the output of reference measurement
+//! ([`crate::attestation::reference::snp::measurement`]).
+//!
+//! Also referred to as the **expected measurement** in attestation APIs.
 
 use crate::{
     error::MeasurementError,
@@ -20,13 +27,13 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "serde")]
 use serde_big_array::BigArray;
 
-/// Launch digest size in bits.
+/// Launch digest size in bits (SHA-384).
 pub const LD_BITS: usize = 384;
 
 /// Launch digest size in bytes.
 pub const LD_BYTES: usize = LD_BITS / 8;
 
-/// SNP launch digest (guest measurement) wire type.
+/// SNP launch digest wire type (48-byte SHA-384 hash).
 #[repr(C)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -87,12 +94,12 @@ impl SnpLaunchDigest {
         Self(data)
     }
 
-    /// Get the launch digest as a hex string
+    /// Return the digest as a lowercase hex string.
     pub fn get_hex_ld(self) -> String {
         format!("{:x}", self)
     }
 
-    /// Returns the raw digest bytes.
+    /// Return the raw 48-byte digest.
     pub fn as_bytes(&self) -> &[u8; LD_BYTES] {
         &self.0
     }

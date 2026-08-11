@@ -1,8 +1,19 @@
 // SPDX-License-Identifier: Apache-2.0
 
+//! Parameters for requesting a guest-derived key from the ASP.
+//!
+//! Wraps the fields accepted by `SNP_GET_DERIVED_KEY`. Converted to
+//! [`DerivedKeyReq`](crate::firmware::guest::types::DerivedKeyReq) for the guest
+//! ioctl. Use [`GuestFieldSelect`] to control which launch-bound guest fields
+//! are mixed into the derived key material.
+
 use super::GuestFieldSelect;
 
-/// Structure of required data for fetching the derived key.
+/// Guest-derived key request parameters for `SNP_GET_DERIVED_KEY`.
+///
+/// Selects root key material (VCEK or VMRK), VMPL, guest SVN, TCB version,
+/// and optional launch mitigation vector. Field inclusion is controlled by
+/// [`guest_field_select`](Self::guest_field_select).
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct DerivedKey {
     /// Selects the root key to derive the key from.

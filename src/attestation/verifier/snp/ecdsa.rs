@@ -1,5 +1,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
+//! ECDSA P-384 report signature verification.
+//!
+//! SNP attestation reports are signed with ECDSA over secp384r1 (P-384) using
+//! SHA-384. The firmware stores `r` and `s` in **little-endian** 72-byte fields;
+//! this module converts between that wire format and the active crypto backend.
+//!
+//! Higher-level callers should use [`super::signature`] or
+//! `(&Certificate, &Report).verify()` in [`super::report`] rather than calling
+//! [`verify_ecdsa_signature`] directly.
+
 use crate::attestation::endorser::snp::Certificate;
 use crate::attestation::evidence::snp::Signature;
 use crate::parser::ByteParser;
@@ -11,7 +21,7 @@ use std::io::{Error, Result};
 use openssl::{bn, ecdsa, ecdsa::EcdsaSig, sha::Sha384};
 
 #[cfg(feature = "crypto-openssl")]
-use super::openssl::{AsLeBytes, FromLe};
+use crate::util::openssl_helpers::{AsLeBytes, FromLe};
 
 #[cfg(feature = "crypto-openssl")]
 impl From<ecdsa::EcdsaSig> for Signature {
@@ -55,8 +65,18 @@ impl TryFrom<&Signature> for p384::ecdsa::Signature {
     }
 }
 
+/// Verify an ECDSA P-384 / SHA-384 signature over a report body using a VEK.
+///
+/// # Arguments
+///
+/// - `body`: bytes covered by the report signature (offsets `0x00`..=`0x29F`)
+/// - `signature`: raw 512-byte firmware signature field (offsets `0x2A0`..=`0x49F`)
+/// - `vek`: Versioned Endorsement Key ([`Certificate`]) whose public key should
+///   have signed `body`
+///
+/// Hashes `body` with SHA-384, parses `signature` into `(r, s)`, and verifies
+/// against the EC public key in `vek`.
 #[cfg(feature = "crypto-openssl")]
-/// Verify ECDSA signature on attestation report using VEK certificate
 pub fn verify_ecdsa_signature(body: &[u8], signature: &[u8], vek: &Certificate) -> Result<()> {
     let sev_sig = Signature::from_bytes(signature)?;
 
@@ -74,8 +94,18 @@ pub fn verify_ecdsa_signature(body: &[u8], signature: &[u8], vek: &Certificate) 
     }
 }
 
+/// Verify an ECDSA P-384 / SHA-384 signature over a report body using a VEK.
+///
+/// # Arguments
+///
+/// - `body`: bytes covered by the report signature (offsets `0x00`..=`0x29F`)
+/// - `signature`: raw 512-byte firmware signature field (offsets `0x2A0`..=`0x49F`)
+/// - `vek`: Versioned Endorsement Key ([`Certificate`]) whose public key should
+///   have signed `body`
+///
+/// Hashes `body` with SHA-384, parses `signature` into `(r, s)`, and verifies
+/// against the EC public key in `vek`.
 #[cfg(feature = "crypto-rust")]
-/// Verify ECDSA signature on attestation report using VEK certificate
 pub fn verify_ecdsa_signature(body: &[u8], signature: &[u8], vek: &Certificate) -> Result<()> {
     let sev_sig = Signature::from_bytes(signature)?;
 

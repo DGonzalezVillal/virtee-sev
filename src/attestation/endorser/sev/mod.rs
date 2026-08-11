@@ -10,16 +10,14 @@ mod chain;
 pub mod sev;
 
 #[cfg(feature = "crypto-openssl")]
-mod util;
-
-#[cfg(feature = "crypto-openssl")]
 mod crypto;
 
 pub use chain::Chain;
 
 use crate::util::*;
+
 #[cfg(feature = "crypto-openssl")]
-use util::*;
+use crate::util::openssl_helpers::*;
 
 use crate::parser::{Decoder, Encoder};
 

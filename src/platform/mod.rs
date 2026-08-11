@@ -2,11 +2,65 @@
 
 //! Host platform management for AMD SEV and SEV-SNP.
 //!
-//! Opens `/dev/sev` and exposes platform status, configuration, and certificate
-//! provisioning. Low-level ioctl layouts live in [`crate::firmware`].
+//! Opens `/dev/sev` and exposes host-side platform ioctls: status queries,
+//! configuration, and (for legacy SEV) certificate provisioning. This is the
+//! **host** counterpart to guest attestation in
+//! [`crate::attestation::attester::snp::Firmware`] (`/dev/sev-guest`).
 //!
-//! Generation-specific APIs live in [`sev`](self::sev) and [`snp`](self::snp).
-//! ABI wire types live under [`crate::types`].
+//! Low-level ioctl layouts live in [`crate::firmware::host`]. Decoded wire
+//! types live in [`crate::types`]. This module wraps both into typed Rust APIs.
+//!
+//! # API layers
+//!
+//! ```text
+//!  /dev/sev
+//!      │
+//!  platform::Firmware::open()
+//!      │
+//!      ├─ Shared (legacy SEV + SNP)
+//!      │     get_identifier()      ──► Identifier
+//!      │     platform_status()     ──► Status
+//!      │
+//!      ├─ Legacy SEV only [`sev`](self::sev)
+//!      │     pek_generate / pek_csr / pek_cert_import
+//!      │     pdh_generate / pdh_cert_export
+//!      │     platform_reset
+//!      │
+//!      └─ SEV-SNP only [`snp`](self::snp)
+//!            snp_platform_status / snp_commit
+//!            snp_set_config / snp_vlek_load
+//! ```
+//!
+//! # Features
+//!
+//! | API | Required features |
+//! |-----|---------------------|
+//! | [`Firmware::open`] | `platform` (Linux) |
+//! | Shared methods | `platform` + (`sev` or `snp`) |
+//! | [`sev`](self::sev) methods | `platform` + `sev` |
+//! | [`snp`](self::snp) methods | `platform` + `snp` |
+//!
+//! SNP platform ioctls that decode TCB fields require an explicit
+//! [`Generation`](crate::types::shared::Generation) — the library
+//! does not auto-detect the host CPU generation.
+//!
+//! # Typical SNP workflow
+//!
+//! ```ignore
+//! use sev::platform::Firmware;
+//! use sev::types::shared::Generation;
+//!
+//! let mut fw = Firmware::open()?;
+//! let id = fw.get_identifier()?;
+//! let status = fw.snp_platform_status(Generation::Turin)?;
+//! fw.snp_commit()?;
+//! ```
+//!
+//! # Errors
+//!
+//! Ioctl failures map to [`UserApiError`](crate::error::UserApiError), wrapping
+//! [`FirmwareError`](crate::error::FirmwareError) from the PSP firmware status
+//! word returned by the kernel.
 
 #[cfg(feature = "sev")]
 pub mod sev;
@@ -21,7 +75,7 @@ use crate::firmware::host::{ioctl::*, types::GetId};
 use crate::firmware::host::types::PlatformStatus;
 
 #[cfg(all(target_os = "linux", any(feature = "sev", feature = "snp")))]
-use crate::types::shared::primitives::FirmwareVersion;
+use crate::types::shared::FirmwareVersion;
 
 #[cfg(any(feature = "sev", feature = "snp"))]
 pub use crate::types::sev::{State, Status, Version};
@@ -35,7 +89,10 @@ use std::{
     os::unix::io::{AsRawFd, RawFd},
 };
 
-/// The CPU-unique identifier for the platform.
+/// CPU-unique platform identifier returned by [`Firmware::get_identifier`].
+///
+/// Hex-formatted via [`Display`](std::fmt::Display). Used to request signed
+/// CEK/VCEK certificates from AMD's key server.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Identifier(pub Vec<u8>);
 
@@ -55,23 +112,43 @@ impl std::fmt::Display for Identifier {
     }
 }
 
-/// A handle to the SEV platform device (`/dev/sev`).
+/// Handle to the host SEV platform device (`/dev/sev`).
+///
+/// Shared entry point for both legacy SEV and SEV-SNP host management. Open
+/// with [`Self::open`], then call methods from this module or the [`sev`](self::sev)
+/// / [`snp`](self::snp) extension impls.
+///
+/// # Platform requirements
+///
+/// - Linux host with `/dev/sev` device node
+/// - `platform` feature enabled
+/// - Appropriate kernel/PSP driver support for the desired ioctls
 #[cfg(target_os = "linux")]
 pub struct Firmware(pub(crate) File);
 
 #[cfg(target_os = "linux")]
 impl Firmware {
-    /// Create a handle to the SEV platform.
+    /// Open a read/write handle to `/dev/sev`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`std::io::Error`] if the device node is missing or cannot be
+    /// opened (for example, the PSP driver is not loaded or the user lacks permission).
     pub fn open() -> std::io::Result<Firmware> {
         Ok(Firmware(
             OpenOptions::new().read(true).write(true).open("/dev/sev")?,
         ))
     }
 
-    /// Get the unique CPU identifier.
+    /// Read the CPU unique identifier via the shared `GET_ID` ioctl.
     ///
-    /// This is especially helpful for sending AMD an HTTP request to fetch
-    /// the signed CEK certificate.
+    /// Available on both legacy SEV and SEV-SNP hosts. The identifier is
+    /// typically used to fetch a signed CEK or VCEK certificate from AMD.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`UserApiError::FirmwareError`](crate::error::UserApiError) when
+    /// the PSP rejects the request.
     #[cfg(any(feature = "sev", feature = "snp"))]
     pub fn get_identifier(&mut self) -> Result<Identifier, UserApiError> {
         let mut bytes = [0u8; 64];
@@ -84,7 +161,17 @@ impl Firmware {
         Ok(Identifier(id.as_slice().to_vec()))
     }
 
-    /// Query the legacy SEV platform status.
+    /// Query legacy SEV platform status via the shared `PLATFORM_STATUS` ioctl.
+    ///
+    /// Available on both legacy SEV and SEV-SNP hosts. Returns firmware version,
+    /// lifecycle [`State`], [`PlatformStatusFlags`](crate::types::sev::PlatformStatusFlags),
+    /// and active guest count. For SNP-specific status fields, use
+    /// [`snp_platform_status`](crate::platform::Firmware::snp_platform_status) instead.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`UserApiError`] when the ioctl fails or the platform state byte
+    /// is unrecognized.
     #[cfg(any(feature = "sev", feature = "snp"))]
     pub fn platform_status(&mut self) -> Result<Status, UserApiError> {
         let mut info: PlatformStatus = Default::default();

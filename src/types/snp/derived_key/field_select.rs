@@ -1,5 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
+//! Bitmask selecting guest fields mixed into a derived key.
+//!
+//! Each set bit in [`GuestFieldSelect`] tells the ASP to include the
+//! corresponding launch-bound value when deriving a guest key. See SNP firmware
+//! specification for field definitions.
+
 use bitfield::bitfield;
 
 bitfield! {

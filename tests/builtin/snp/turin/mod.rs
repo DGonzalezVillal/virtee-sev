@@ -1,30 +1,30 @@
 // SPDX-License-Identifier: Apache-2.0
 
-use super::*;
+use ::sev::attestation::endorser::snp::Certificate;
+use std::io::Result;
 
-/// The public Milan ARK certificate (PEM-encoded).
+/// The public Turin ARK certificate (PEM-encoded).
 pub const ARK: &[u8] = include_bytes!("ark.pem");
 
-/// The public Milan ASK certificate (PEM-encoded).
+/// The public Turin ASK certificate (PEM-encoded).
 pub const ASK: &[u8] = include_bytes!("ask.pem");
 
-/// Get the Milan ARK Certificate.
+/// Get the Turin ARK Certificate.
 pub fn ark() -> Result<Certificate> {
     Certificate::from_pem(ARK)
 }
 
-/// Get the Milan ASK Certificate.
+/// Get the Turin ASK Certificate.
 pub fn ask() -> Result<Certificate> {
     Certificate::from_pem(ASK)
 }
 
 mod tests {
     use super::*;
-    use crate::attestation::verifier::Verifiable;
+    use ::sev::attestation::verifier::Verifiable;
 
     #[test]
     fn ark_self_signed() {
-
         let ark = ark().unwrap();
 
         (&ark, &ark).verify().unwrap();

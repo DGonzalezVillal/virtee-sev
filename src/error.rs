@@ -1,5 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
+//! Error types returned by public crate APIs.
+//!
+//! Most ioctl wrappers surface [`UserApiError`], which wraps firmware status
+//! codes, certificate parsing failures, and attestation report errors. Lower-
+//! level modules define focused enums such as [`CertError`] and
+//! [`HashstickError`] that convert into [`UserApiError`] where appropriate.
+
 #[cfg(feature = "crypto-openssl")]
 use openssl::error::ErrorStack;
 use std::{
@@ -511,8 +518,12 @@ impl From<FirmwareError> for c_int {
     }
 }
 
+/// Top-level error returned by public ioctl wrappers and attestation helpers.
+///
+/// Individual variants wrap [`FirmwareError`], [`CertError`], VMM errors, and
+/// attestation parsing failures. Use [`std::error::Error::source`] to inspect
+/// the underlying cause.
 #[derive(Debug)]
-/// Wrapper Error for Firmware or User API Errors
 pub enum UserApiError {
     /// Sev Firmware related errors.
     FirmwareError(FirmwareError),

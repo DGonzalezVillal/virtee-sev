@@ -1,11 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
-//! AMD's TURIN certificates.
+//! AMD Turin ARK and ASK certificates.
 //!
-//! Certificate provenance: <https://developer.amd.com/wp-content/resources/ask_ark_turin.cert>
-//!
-//! For convenience, the certificate chain has been split into individual
-//! certificates and are embedded here as byte slices.
+//! Provenance: <https://developer.amd.com/wp-content/resources/ask_ark_turin.cert>
 
 /// The public Turin ARK certificate.
 pub const ARK: &[u8] = include_bytes!("ark.cert");

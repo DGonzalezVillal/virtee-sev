@@ -1,5 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
+//! Guest owner identifier types for SNP ID blocks.
+//!
+//! [`FamilyId`] and [`ImageId`] are 128-bit values provided by the guest owner.
+//! The firmware stores them in the ID block and may mix them into derived keys
+//! when requested via [`GuestFieldSelect`](crate::types::snp::GuestFieldSelect).
+
 use crate::{
     error::IdBlockError,
     parser::{ByteParser, Decoder, Encoder},

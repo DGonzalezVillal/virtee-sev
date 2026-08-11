@@ -6,8 +6,8 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
-- Introduced [`FirmwareVersion`](crate::types::shared::primitives::FirmwareVersion) in
-  `types::shared::primitives::version` as the shared major/minor/build triple for
+- Introduced [`FirmwareVersion`](crate::types::shared::FirmwareVersion) in
+  `types::shared::version` as the shared major/minor/build triple for
   SEV platform status and SNP attestation reports.
 - Moved `PageType` from `launch` into `types::snp` so reference and launch
   code share the SNP firmware page-type enum without coupling roles to launch.
@@ -69,7 +69,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
-- Removed `types::sev::Build`; use [`FirmwareVersion`](crate::types::shared::primitives::FirmwareVersion)
+- Removed `types::sev::Build`; use [`FirmwareVersion`](crate::types::shared::FirmwareVersion)
   for the major/minor/build triple. `types::sev::Version` remains the
   major/minor pair for ioctl and certificate layouts. `Status::firmware_version`
   replaces `Status::build`.
@@ -81,7 +81,7 @@ All notable changes to this project will be documented in this file.
   and `crypto-rust` instead.
 - Guest firmware ioctls (`firmware::guest`) compile only with `attester`.
 - SNP platform APIs take [`Generation`] explicitly instead of auto-detecting via
-  CPUID. [`Generation::identify_host_generation`](crate::types::shared::primitives::Generation::identify_host_generation)
+  CPUID. [`Generation::identify_host_generation`](crate::types::shared::Generation::identify_host_generation)
   remains available on Linux x86_64 as an optional helper.
 - Moved `PlatformInfo` and `KeyInfo` to `attestation::evidence::snp::fields`.
   These are grouped report-body parsing views, not standalone SNP ABI types.

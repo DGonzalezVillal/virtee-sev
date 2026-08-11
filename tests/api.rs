@@ -9,7 +9,7 @@ mod sev {
     use sev::{
         attestation::endorser::sev::sev::Usage,
         platform::Firmware,
-        types::shared::primitives::FirmwareVersion,
+        types::shared::FirmwareVersion,
     };
 
     #[cfg(feature = "dangerous_hw_tests")]
@@ -115,7 +115,7 @@ mod sev {
 mod snp {
     use serial_test::serial;
     use sev::platform::{snp::{Config, MaskId, SnpPlatformStatus, TcbVersion}, Firmware};
-    use sev::types::shared::primitives::Generation;
+    use sev::types::shared::Generation;
 
     fn host_generation() -> Generation {
         #[cfg(all(target_arch = "x86_64", feature = "snp"))]

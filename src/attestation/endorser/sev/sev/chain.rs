@@ -60,28 +60,28 @@ impl Encoder<()> for Chain {
     }
 }
 
-impl TryFrom<&Chain> for crate::types::shared::primitives::Generation {
+impl TryFrom<&Chain> for crate::types::shared::Generation {
     type Error = ();
 
     fn try_from(schain: &Chain) -> std::result::Result<Self, Self::Error> {
         use crate::attestation::verifier::Verifiable;
 
-        let naples: super::super::ca::Chain = crate::types::shared::primitives::Generation::Naples.into();
-        let rome: super::super::ca::Chain = crate::types::shared::primitives::Generation::Rome.into();
-        let milan: super::super::ca::Chain = crate::types::shared::primitives::Generation::Milan.into();
-        let genoa: super::super::ca::Chain = crate::types::shared::primitives::Generation::Genoa.into();
-        let turin: super::super::ca::Chain = crate::types::shared::primitives::Generation::Turin.into();
+        let naples: super::super::ca::Chain = crate::types::shared::Generation::Naples.into();
+        let rome: super::super::ca::Chain = crate::types::shared::Generation::Rome.into();
+        let milan: super::super::ca::Chain = crate::types::shared::Generation::Milan.into();
+        let genoa: super::super::ca::Chain = crate::types::shared::Generation::Genoa.into();
+        let turin: super::super::ca::Chain = crate::types::shared::Generation::Turin.into();
 
         Ok(if (&naples.ask, &schain.cek).verify().is_ok() {
-            crate::types::shared::primitives::Generation::Naples
+            crate::types::shared::Generation::Naples
         } else if (&rome.ask, &schain.cek).verify().is_ok() {
-            crate::types::shared::primitives::Generation::Rome
+            crate::types::shared::Generation::Rome
         } else if (&milan.ask, &schain.cek).verify().is_ok() {
-            crate::types::shared::primitives::Generation::Milan
+            crate::types::shared::Generation::Milan
         } else if (&genoa.ask, &schain.cek).verify().is_ok() {
-            crate::types::shared::primitives::Generation::Genoa
+            crate::types::shared::Generation::Genoa
         } else if (&turin.ask, &schain.cek).verify().is_ok() {
-            crate::types::shared::primitives::Generation::Turin
+            crate::types::shared::Generation::Turin
         } else {
             return Err(());
         })

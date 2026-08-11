@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
+//! X.509 certificate wrapper (pure-Rust `x509-cert` backend).
+//!
+//! Same public [`Certificate`] type name as the OpenSSL backend; this module is
+//! compiled when `crypto-rust` is enabled instead of `crypto-openssl`.
+
 use super::*;
 
 use der::{Decode, DecodePem, Encode};
@@ -7,8 +12,10 @@ use std::io;
 use std::io::ErrorKind;
 use x509_cert::der;
 
-/// Structures/interfaces for SEV-SNP certificates.
-
+/// SNP endorsement X.509 certificate (pure-Rust backend).
+///
+/// Parse with [`Self::from_pem`] or [`Self::from_der`]. Used as elements of
+/// [`CaChain`](super::CaChain) and [`Chain`](super::Chain).
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Certificate(x509_cert::Certificate);
 
@@ -36,6 +43,12 @@ impl From<&Certificate> for x509_cert::Certificate {
 impl From<&x509_cert::Certificate> for Certificate {
     fn from(value: &x509_cert::Certificate) -> Self {
         Self(value.clone())
+    }
+}
+
+impl<'a: 'b, 'b> From<&'a Certificate> for &'b x509_cert::Certificate {
+    fn from(value: &'a Certificate) -> Self {
+        &value.0
     }
 }
 

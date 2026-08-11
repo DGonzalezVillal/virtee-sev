@@ -7,7 +7,7 @@
 
 mod key;
 
-use crate::{error::SessionError, types::shared::primitives::FirmwareVersion};
+use crate::{error::SessionError, types::shared::FirmwareVersion};
 
 use super::{Header, HeaderFlags, Measurement, Policy, PolicyFlags, Secret, Session as LaunchSession, Start};
 
@@ -290,7 +290,7 @@ impl Session<Verified> {
 #[cfg(test)]
 mod initialized {
     use super::*;
-    use crate::types::shared::primitives::FirmwareVersion;
+    use crate::types::shared::FirmwareVersion;
 
     #[test]
     fn session() {

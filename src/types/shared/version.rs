@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! Firmware version triple (major, minor, build) and report wire encoding.
+//!
+//! [`FirmwareVersion`] is the canonical semver-style triple used in SNP
+//! attestation report bodies and decoded SEV platform status. On the wire the
+//! three bytes appear in **build, minor, major** order (little-endian fields).
 
 use crate::{
     parser::{ByteParser, Decoder, Encoder},
@@ -11,7 +15,11 @@ use std::io::{Read, Write};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-/// A semver-style firmware version (major, minor, build).
+/// Firmware version as major, minor, and build components.
+///
+/// Used in attestation report bodies, platform status, and as a parsing
+/// context for types whose reserved-bit rules changed across firmware releases
+/// (for example [`GuestPolicy`](crate::types::snp::GuestPolicy)).
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct FirmwareVersion {
@@ -24,7 +32,7 @@ pub struct FirmwareVersion {
 }
 
 impl FirmwareVersion {
-    /// Create a new firmware version.
+    /// Create a firmware version triple.
     pub const fn new(major: u8, minor: u8, build: u8) -> Self {
         Self {
             major,

@@ -1,6 +1,31 @@
 // SPDX-License-Identifier: Apache-2.0
 
-//! OpenSSL conversions for SNP ID block wire types.
+//! OpenSSL ECDSA helpers for SNP ID block wire types.
+//!
+//! Bridges OpenSSL [`EcKey`] / [`EcdsaSig`] to the firmware-facing types in
+//! [`crate::types::snp`]. Used by [`super::gen_id_auth_block`] and
+//! [`super::generate_key_digest`]; not part of the public API.
+//!
+//! # Signing pipeline
+//!
+//! ```text
+//!  EcKey<Private> + message bytes
+//!         │
+//!         ▼
+//!  ECDSA-SHA-384 (OpenSSL digest_sign)
+//!         │
+//!         ▼
+//!  DER signature → (r, s) big-endian BNs
+//!         │
+//!         ▼
+//!  pad to 72 bytes, reverse byte order
+//!         │
+//!         ▼
+//!  SevEcdsaSig { r, s }   (AUTH block wire layout)
+//! ```
+//!
+//! Public keys follow the same little-endian padded coordinate layout expected
+//! in [`IdAuth`](crate::types::snp::IdAuth).
 
 use openssl::{
     bn::{BigNum, BigNumContext},
@@ -19,8 +44,27 @@ use crate::{
     types::snp::{SevEcdsaKeyData, SevEcdsaPubKey, SevEcdsaSig, CURVE_P384, ECDSA_POINT_SIZE_BYTES},
 };
 
+/// OpenSSL NID for the SECP384R1 curve required by SNP ID blocks.
 const CURVE_P384_NID: Nid = Nid::SECP384R1;
 
+/// ECDSA-SHA-384 sign `data` with `priv_key` and encode as [`SevEcdsaSig`].
+///
+/// # Used for
+///
+/// * [`IdAuth::id_block_sig`](crate::types::snp::IdAuth::id_block_sig) —
+///   signature over serialized [`IdBlock`](crate::types::snp::IdBlock) bytes
+/// * [`IdAuth::id_key_sig`](crate::types::snp::IdAuth::id_key_sig) —
+///   signature over serialized ID [`SevEcdsaPubKey`](crate::types::snp::SevEcdsaPubKey) bytes
+///
+/// OpenSSL returns a DER-encoded signature; this impl splits it into `(r, s)`,
+/// pads each component to [`ECDSA_POINT_SIZE_BYTES`](crate::types::snp::ECDSA_POINT_SIZE_BYTES)
+/// (72), and reverses byte order to match firmware layout.
+///
+/// # Errors
+///
+/// * [`IdBlockError::CryptoErrorStack`](crate::error::IdBlockError::CryptoErrorStack) — OpenSSL failure
+/// * [`IdBlockError::SevEcsdsaSigError`](crate::error::IdBlockError::SevEcsdsaSigError) — unexpected DER length
+/// * [`IdBlockError::BadVectorError`](crate::error::IdBlockError::BadVectorError) — `(r, s)` padding mismatch
 impl TryFrom<(EcKey<Private>, &[u8])> for SevEcdsaSig {
     type Error = IdBlockError;
 
@@ -74,6 +118,22 @@ impl TryFrom<(EcKey<Private>, &[u8])> for SevEcdsaSig {
     }
 }
 
+/// Extract a firmware-format P-384 public key from an OpenSSL private key.
+///
+/// Computes affine `(x, y)` coordinates, pads each to
+/// [`ECDSA_POINT_SIZE_BYTES`](crate::types::snp::ECDSA_POINT_SIZE_BYTES), reverses
+/// byte order, and sets the curve identifier to
+/// [`CURVE_P384`](crate::types::snp::CURVE_P384). The result is embedded in
+/// [`IdAuth::id_pubkey`](crate::types::snp::IdAuth::id_pubkey) or
+/// [`IdAuth::author_pub_key`](crate::types::snp::IdAuth::author_pub_key).
+///
+/// Key digests ([`super::generate_key_digest`]) are
+/// `SHA-384(SevEcdsaPubKey::to_bytes())` over this wire form.
+///
+/// # Errors
+///
+/// * [`IdBlockError::CryptoErrorStack`](crate::error::IdBlockError::CryptoErrorStack) — OpenSSL failure
+/// * [`IdBlockError::BadVectorError`](crate::error::IdBlockError::BadVectorError) — coordinate padding mismatch
 impl TryFrom<&EcKey<Private>> for SevEcdsaPubKey {
     type Error = IdBlockError;
 

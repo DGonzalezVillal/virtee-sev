@@ -1,12 +1,57 @@
 // SPDX-License-Identifier: Apache-2.0
 
-#[cfg(feature = "sev")]
+//! Certificate chain integration tests (require attestation role features).
+
+#[cfg(all(
+    feature = "sev",
+    feature = "crypto-openssl",
+    any(
+        feature = "evidence",
+        feature = "reference",
+        feature = "verifier",
+        feature = "endorser",
+        feature = "attester"
+    )
+))]
 mod naples;
 
-#[cfg(feature = "sev")]
+#[cfg(all(
+    feature = "sev",
+    feature = "crypto-openssl",
+    any(
+        feature = "evidence",
+        feature = "reference",
+        feature = "verifier",
+        feature = "endorser",
+        feature = "attester"
+    )
+))]
 mod rome;
 
-#[cfg(all(feature = "crypto-openssl", feature = "sev"))]
+#[cfg(all(
+    feature = "snp",
+    any(feature = "crypto-openssl", feature = "crypto-rust"),
+    any(
+        feature = "evidence",
+        feature = "reference",
+        feature = "verifier",
+        feature = "endorser",
+        feature = "attester"
+    )
+))]
+mod builtin;
+
+#[cfg(all(
+    feature = "crypto-openssl",
+    feature = "sev",
+    any(
+        feature = "evidence",
+        feature = "reference",
+        feature = "verifier",
+        feature = "endorser",
+        feature = "attester"
+    )
+))]
 mod sev {
     use super::*;
 
@@ -23,12 +68,23 @@ mod sev {
     }
 }
 
-#[cfg(all(feature = "snp", any(feature = "crypto-openssl", feature = "crypto-rust")))]
+#[cfg(all(
+    feature = "snp",
+    any(feature = "crypto-openssl", feature = "crypto-rust"),
+    any(
+        feature = "evidence",
+        feature = "reference",
+        feature = "verifier",
+        feature = "endorser",
+        feature = "attester"
+    )
+))]
 mod snp {
 
     use std::convert::TryFrom;
 
-    use sev::attestation::endorser::snp::{builtin::milan, ca, Certificate, Chain};
+    use super::builtin::snp::milan;
+    use sev::attestation::endorser::snp::{ca::CaChain, Certificate, Chain};
     use sev::attestation::verifier::Verifiable;
 
     const TEST_MILAN_VCEK_DER: &[u8] = include_bytes!("certs_data/vcek_milan.der");
@@ -50,7 +106,7 @@ mod snp {
         let ask = milan::ask().unwrap();
         let vcek = Certificate::from_der(TEST_MILAN_VCEK_DER).unwrap();
 
-        let ca = ca::Chain { ark, ask };
+        let ca = CaChain { ark, ask };
 
         let chain = Chain {
             ca,
@@ -70,7 +126,7 @@ mod snp {
             Certificate::from_der(&buf).unwrap()
         };
 
-        let ca = ca::Chain { ark, ask };
+        let ca = CaChain { ark, ask };
 
         let chain = Chain { ca, vek: vcek };
 
@@ -85,7 +141,7 @@ mod snp {
         let ask = milan::ask().unwrap();
         let vcek = Certificate::from_der(TEST_MILAN_VCEK_DER).unwrap();
 
-        let ca = ca::Chain { ark, ask };
+        let ca = CaChain { ark, ask };
 
         let chain = Chain { ca, vek: vcek };
 
@@ -107,7 +163,7 @@ mod snp {
         let ask = milan::ask().unwrap();
         let vcek = Certificate::from_der(TEST_MILAN_VCEK_DER).unwrap();
 
-        let ca = ca::Chain { ark, ask };
+        let ca = CaChain { ark, ask };
 
         let chain = Chain { ca, vek: vcek };
 
@@ -122,7 +178,7 @@ mod snp {
     fn milan_ca_stack() {
         let vcek = Certificate::from_der(TEST_MILAN_VCEK_DER).unwrap();
 
-        let ca = ca::Chain::from_pem_bytes(TEST_MILAN_CA).unwrap();
+        let ca = CaChain::from_pem_bytes(TEST_MILAN_CA).unwrap();
 
         let chain = Chain {
             ca,
@@ -137,7 +193,7 @@ mod snp {
     fn turin_ca_stack() {
         let vcek = Certificate::from_der(TEST_TURIN_VCEK_DER).unwrap();
 
-        let ca = ca::Chain::from_pem_bytes(TEST_TURIN_CA).unwrap();
+        let ca = CaChain::from_pem_bytes(TEST_TURIN_CA).unwrap();
 
         let chain = Chain {
             ca,

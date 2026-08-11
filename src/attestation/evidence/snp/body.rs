@@ -3,17 +3,17 @@
 use crate::{
     attestation::evidence::snp::SignatureAlgorithm,
     parser::Decoder,
-    types::shared::primitives::Generation,
-    types::shared::primitives::FirmwareVersion,
-    types::snp::{GuestPolicy, TcbVersion},
+    types::{
+        shared::{FirmwareVersion, Generation},
+        snp::{GuestPolicy, TcbVersion},
+    },
     util::{hexline::HexLine, parser_helper::validate_reserved},
 };
 
 use std::convert::TryFrom;
 use std::fmt::Display;
 
-use super::fields::{KeyInfo, PlatformInfo};
-use super::variant::ReportVariant;
+use super::fields::{KeyInfo, PlatformInfo, ReportVariant};
 
 /// A zero-copy view of the attestation report body.
 /// All byte-arrayfields are borrowed from the original report body slice, so the input bytes must outlive this struct.

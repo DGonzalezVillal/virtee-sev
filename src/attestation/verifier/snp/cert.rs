@@ -1,5 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
+//! X.509 certificate signature verification (OpenSSL backend).
+//!
+//! Implements [`Verifiable`](crate::attestation::verifier::Verifiable) for
+//! `(signer, signee)` certificate pairs using OpenSSL. This is the building
+//! block for chain verification in [`super::chain`].
+
 use crate::attestation::endorser::snp::Certificate;
 use crate::attestation::verifier::Verifiable;
 
@@ -8,7 +14,14 @@ use openssl::x509::X509;
 
 use std::io::{Error, ErrorKind, Result};
 
-/// Verify if the public key of one Certificate signs another Certificate.
+/// Verify that one certificate's public key signed another certificate.
+///
+/// `self.0` is the **signer** (issuer) and `self.1` is the **signee** (subject).
+/// OpenSSL validates the X.509 signature on `signee` using the public key
+/// extracted from `signer`.
+///
+/// Used for ARK self-signature, ARK → ASK, ASK → VCEK/VLEK, and similar
+/// checks during chain validation.
 impl Verifiable for (&Certificate, &Certificate) {
     type Output = ();
 

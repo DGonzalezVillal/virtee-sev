@@ -1,12 +1,17 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! SNP platform status, configuration, and certificate-table types.
+//!
+//! These structures mirror the SNP firmware platform ABI (Chapter 8). Decode
+//! with [`ByteParser::from_bytes_with`](crate::parser::ByteParser::from_bytes_with)
+//! and an explicit [`Generation`](crate::types::shared::Generation).
+//! Host ioctl wrappers that populate them live in [`crate::platform::snp`].
 
 pub use super::cert_table::{CertTableEntry, RawData};
 
 use crate::{
     parser::{ByteParser, Decoder, Encoder},
-    types::shared::primitives::Generation,
+    types::shared::Generation,
     util::{
         hexline::HexLine,
         parser_helper::{ReadExt, WriteExt},
@@ -102,13 +107,13 @@ pub struct SnpPlatformStatus {
     /// The platform state.
     pub state: u8,
 
-    /// IsRmpInitiailzied
+    /// RMP initialization and platform readiness flags (firmware byte 0x3).
     pub is_rmp_init: PlatformInit,
 
     /// The platform build ID.
     pub build_id: u32,
 
-    /// PlatforPolicy of the machine
+    /// Platform policy flags (mask chip ID/key, VLEK loaded, RAPL, …).
     pub platform_policy: PlatformPolicy,
 
     /// The number of valid guests maintained by the SEV-SNP firmware.
@@ -161,7 +166,10 @@ impl ByteParser<Generation> for SnpPlatformStatus {
     const EXPECTED_LEN: Option<usize> = Some(32);
 }
 
-/// Sets the system wide configuration values for SNP.
+/// SNP platform-wide configuration written by [`crate::platform::Firmware::snp_set_config`].
+///
+/// Controls the reported TCB version embedded in guest attestation reports and
+/// whether the chip ID field is masked via [`MaskId`].
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[repr(C, packed)]
 pub struct Config {
@@ -187,7 +195,7 @@ impl Default for Config {
 }
 
 impl Config {
-    /// Used to create a new Config
+    /// Creates platform configuration with the given reported TCB and mask ID.
     pub fn new(reported_tcb: TcbVersion, mask_id: MaskId) -> Self {
         Self {
             reported_tcb,
@@ -279,9 +287,10 @@ impl Display for PlatformPolicy {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-/// Wrapped VLEK Hashstick strucutre.
-/// As defined in AMD's SEV-SNP specification chapter 8.30
-/// An address to a buffer containing this structure is passed to the snp_vlek_load command.
+/// Wrapped VLEK hashstick passed to [`crate::platform::Firmware::snp_vlek_load`].
+///
+/// Defined in AMD SEV-SNP firmware specification Chapter 8.30. The structure is
+/// AES-256-GCM wrapped and includes the associated TCB version.
 pub struct WrappedVlekHashstick {
     /// IV used to wrap chip-unique key
     pub iv: [u8; 12], // 96 bits = 12 bytes

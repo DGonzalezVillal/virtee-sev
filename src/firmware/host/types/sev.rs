@@ -1,20 +1,39 @@
 // SPDX-License-Identifier: Apache-2.0
 
+//! Legacy SEV host ioctl payload layouts.
+//!
+//! Structures for first-generation SEV platform key provisioning ioctls:
+//! Platform Endorsement Key (PEK) and Platform Diffie-Hellman (PDH) operations.
+//!
+//! Requires the `sev` feature. Public wrappers are in
+//! [`crate::platform::sev`].
+//!
+//! Shared legacy/SNP payloads ([`PlatformStatus`], [`GetId`]) live in
+//! [`super::shared`].
+
 #[cfg(target_os = "linux")]
 use crate::attestation::endorser::sev::sev;
 
 #[cfg(target_os = "linux")]
 use std::marker::PhantomData;
 
+/// Platform reset payload (no fields).
+///
+/// Used by the legacy-only `PLATFORM_RESET` ioctl. See AMD SEV API specification
+/// chapter 5.5.
+#[cfg(target_os = "linux")]
+pub struct PlatformReset;
+
 /// Generate a new Platform Endorsement Key (PEK).
 ///
-/// (Chapter 5.7)
+/// See AMD SEV API specification chapter 5.7.
 #[cfg(target_os = "linux")]
 pub struct PekGen;
 
-/// Request certificate signing.
+/// Request PEK certificate signing (CSR) payload.
 ///
-/// (Chapter 5.8; Table 27)
+/// Points at a legacy SEV [`Certificate`](crate::attestation::endorser::sev::sev::Certificate)
+/// buffer the kernel fills. See chapter 5.8, table 27.
 #[repr(C, packed)]
 #[cfg(target_os = "linux")]
 pub struct PekCsr<'a> {
@@ -25,6 +44,7 @@ pub struct PekCsr<'a> {
 
 #[cfg(target_os = "linux")]
 impl<'a> PekCsr<'a> {
+    /// Build a CSR payload referencing a certificate buffer.
     pub fn new(cert: &'a mut sev::Certificate) -> Self {
         Self {
             addr: cert as *mut _ as _,
@@ -34,9 +54,9 @@ impl<'a> PekCsr<'a> {
     }
 }
 
-/// Join the platform to the domain.
+/// Import PEK and OCA certificates to join the platform to a domain.
 ///
-/// (Chapter 5.9; Table 29)
+/// See AMD SEV API specification chapter 5.9, table 29.
 #[cfg(target_os = "linux")]
 #[repr(C, packed)]
 pub struct PekCertImport<'a> {
@@ -49,6 +69,7 @@ pub struct PekCertImport<'a> {
 
 #[cfg(target_os = "linux")]
 impl<'a> PekCertImport<'a> {
+    /// Build an import payload from PEK and OCA certificate buffers.
     pub fn new(pek: &'a sev::Certificate, oca: &'a sev::Certificate) -> Self {
         Self {
             pek_addr: pek as *const _ as _,
@@ -60,15 +81,15 @@ impl<'a> PekCertImport<'a> {
     }
 }
 
-/// (Re)generate the Platform Diffie-Hellman (PDH).
+/// (Re)generate the Platform Diffie-Hellman (PDH) key.
 ///
-/// (Chapter 5.10)
+/// See AMD SEV API specification chapter 5.10.
 #[cfg(target_os = "linux")]
 pub struct PdhGen;
 
-/// Retrieve the PDH and the platform certificate chain.
+/// Export PDH and platform certificate chain payload.
 ///
-/// (Chapter 5.11)
+/// See AMD SEV API specification chapter 5.11.
 #[cfg(target_os = "linux")]
 #[repr(C, packed)]
 pub struct PdhCertExport<'a> {
@@ -81,6 +102,7 @@ pub struct PdhCertExport<'a> {
 
 #[cfg(target_os = "linux")]
 impl<'a> PdhCertExport<'a> {
+    /// Build an export payload referencing PDH and a three-certificate chain buffer.
     pub fn new(pdh: &'a mut sev::Certificate, certs: &'a mut [sev::Certificate; 3]) -> Self {
         Self {
             pdh_addr: pdh as *mut _ as _,

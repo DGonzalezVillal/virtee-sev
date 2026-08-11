@@ -7,7 +7,8 @@ use crate::{
 
 /// A zero-copy view of a raw SEV-SNP attestation report.
 ///
-/// This type splits the report into two byte slices:
+/// This type splits the report into borrowed views:
+/// - `algorithm`: the signature algorithm identifier (decoded from body offset `0x34`)
 /// - `body`: the bytes covered by the report signature
 /// - `signature`: the firmware-provided signature bytes
 ///
@@ -17,22 +18,24 @@ use crate::{
 /// body.
 ///
 /// This design supports a two-phase workflow:
-/// 1) Parse the outer framing to locate the signed body and signature.
-/// 2) Verify the signature over `body`, then parse the verified body into
+/// 1. Parse the outer framing with [`Report::from_bytes`] to locate the signed
+///    body, signature, and signature algorithm.
+/// 2. Verify the signature over `body`, then parse the verified body into
 ///    [`ReportBody`](super::ReportBody) for typed access.
 ///
 /// # Notes
+///
 /// - `Report` borrows from the input buffer (`'a`), so the input bytes must
 ///   outlive the `Report`.
 /// - The offsets used by [`Report::from_bytes`] assume the current fixed
-///   firmware report layout and size (1184 bytes).
+///   firmware report layout and size ([`Report::REPORT_LEN`] bytes).
 #[derive(Debug, Clone, Copy)]
 pub struct Report<'a> {
-    /// The signature algorithm used to sign the attestation report
+    /// Signature algorithm used to sign this report (from body offset `0x34`).
     pub algorithm: SignatureAlgorithm,
-    /// The bytes covered by the report signature (bytes 0x00 to 0x2A0).
+    /// Bytes covered by the report signature (`0x00..0x2A0`).
     pub body: &'a [u8],
-    /// The signature bytes (0x2A0..0x4A0).
+    /// Firmware-provided signature bytes (`0x2A0..0x4A0`).
     pub signature: &'a [u8],
 }
 
@@ -44,10 +47,11 @@ impl<'a> Report<'a> {
     const SIG_LEN: usize = 0x200; // bytes 0x2A0..=0x49F
     const SIG_ALGO_OFF: usize = 0x34;
     const SIG_ALGO_LEN: usize = 0x4;
-    /// Parse a raw attestation report into body and signature slices.
+    /// Parse a raw attestation report into body, signature, and algorithm views.
     ///
     /// This function performs **framing only**:
-    /// - validates the total report length
+    /// - validates the total report length ([`Self::REPORT_LEN`])
+    /// - decodes [`SignatureAlgorithm`] from body offset `0x34`
     /// - returns borrowed slices for the signed body and signature
     ///
     /// It does **not** verify the signature or validate reserved fields.

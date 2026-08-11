@@ -1,6 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! SNP certificate table entry types.
+//!
+//! [`CertTableEntry`] is the portable representation of one certificate in an
+//! SNP certificate chain (a [`CertType`] GUID plus DER bytes). Entries are
+//! ordered by `cert_type` when building endorsement chains.
+//!
+//! Kernel-side wire parsing for the Linux `sev-guest` cert-table layout lives
+//! in the internal `firmware::guest::cert_table` module; attestation and
+//! endorser code consume the parsed [`CertTableEntry`] values from this module.
 
 use crate::{
     parser::{ByteParser, Decoder, Encoder},
@@ -15,7 +23,10 @@ use std::{
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-/// Raw certificate bytes (by pointer or Vec<u8>).
+/// Certificate payload referenced by pointer or owned bytes.
+///
+/// Used where ioctl buffers accept either a userspace pointer or an inline
+/// vector depending on the caller context.
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum RawData {
     /// A mutable pointer to an unsigned byte.
@@ -60,10 +71,15 @@ impl From<&mut Vec<u8>> for RawData {
     }
 }
 
+/// One certificate in an SNP certificate table.
+///
+/// Each entry pairs a well-known [`CertType`] GUID (ARK, ASK, VCEK, VLEK, …)
+/// with the raw certificate DER. Use [`CertTableEntry::new`] or
+/// [`CertTableEntry::from_guid`] to construct entries for endorser chain
+/// building.
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[repr(C)]
-/// An entry with information regarding a specific certificate.
 pub struct CertTableEntry {
     /// Certificate type GUID.
     pub cert_type: CertType,

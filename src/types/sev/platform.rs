@@ -1,9 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
-/// The platform state.
-///
-/// The underlying SEV platform behaves like a state machine and can
-/// only perform certain actions while it is in certain states.
+//! First-generation SEV platform lifecycle state.
+//!
+//! Returned as part of [`Status`](crate::types::sev::Status) from the shared
+//! `PLATFORM_STATUS` ioctl. The platform behaves as a state machine — only
+//! certain provisioning actions are valid in each state.
+
+/// Platform lifecycle state from the legacy SEV `PLATFORM_STATUS` ioctl.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[repr(u8)]
 pub enum State {

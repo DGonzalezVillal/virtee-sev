@@ -1,11 +1,19 @@
 // SPDX-License-Identifier: Apache-2.0
 
-//! Helpful primitives for developing the crate.
+//! Internal utilities shared across the crate.
+//!
+//! - [`parser_helper`] — [`Read`](std::io::Read) / [`Write`](std::io::Write)
+//!   extensions for [`crate::parser`] decode/encode impls
+//! - [`hexline`](self::hexline) — hex formatting for debug display
+//! - [`cached_chain`](self::cached_chain) — test helper for fetching AMD cert chains
+//! - [`openssl_helpers`](self::openssl_helpers) — OpenSSL little-endian conversions (`crypto-openssl`)
 
 // pub mod array;
 pub mod cached_chain;
 pub(crate) mod hexline;
 mod impl_const_id;
+#[cfg(feature = "crypto-openssl")]
+pub(crate) mod openssl_helpers;
 pub mod parser_helper;
 
 use std::{

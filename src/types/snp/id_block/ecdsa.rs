@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
+//! ECDSA P-384 wire layouts for SNP ID authentication blocks.
+//!
+//! Fixed-size coordinate and signature fields used in [`IdAuth`](super::IdAuth).
+//! Coordinates are 72-byte little-endian scalars (576 bits).
+
 use crate::{
     parser::{ByteParser, Decoder, Encoder},
     util::parser_helper::{ReadExt, WriteExt},

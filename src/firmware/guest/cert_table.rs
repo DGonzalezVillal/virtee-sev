@@ -1,12 +1,24 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! Linux `sev-guest` certificate-table wire format.
+//!
+//! When a guest requests an extended attestation report, the hypervisor may
+//! populate a buffer with a GUID-indexed certificate table (ARK, ASK, VCEK/VLEK).
+//! This module serializes and parses that kernel UAPI layout.
+//!
+//! Higher-level certificate entries are represented by
+//! [`CertTableEntry`](crate::types::snp::CertTableEntry). Endorsement chain
+//! construction from parsed entries lives in
+//! [`crate::attestation::endorser::snp`].
 
 use crate::error::CertError;
 use crate::types::snp::CertTableEntry;
 use uuid::Uuid;
 
-/// Linux kernel `cert_table_entry` layout from `sev-guest` UAPI headers.
+/// One entry in the Linux kernel `cert_table_entry` chain.
+///
+/// Each entry is a 16-byte GUID, a byte offset from the table start, and a
+/// length. A zero GUID terminates the chain.
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
 #[repr(C)]
 pub struct KernelCertTableEntry {
@@ -16,7 +28,11 @@ pub struct KernelCertTableEntry {
 }
 
 impl KernelCertTableEntry {
-    /// Serializes entries to the kernel certificate-table buffer layout.
+    /// Serialize [`CertTableEntry`] values into the kernel certificate-table layout.
+    ///
+    /// Writes the header chain (including a zero-GUID terminator) followed by
+    /// concatenated certificate DER bytes. Offsets are in native endianness to
+    /// match the kernel UAPI.
     pub fn cert_table_to_vec_bytes(table: &[CertTableEntry]) -> Result<Vec<u8>, CertError> {
         let mut bytes: Vec<u8> = vec![];
         let mut offset: u32 =
@@ -42,7 +58,7 @@ impl KernelCertTableEntry {
         Ok(bytes)
     }
 
-    /// Parses a kernel certificate-table buffer into entries.
+    /// Parse a kernel certificate-table buffer into [`CertTableEntry`] values.
     pub fn vec_bytes_to_cert_table(bytes: &mut [u8]) -> Result<Vec<CertTableEntry>, CertError> {
         let cert_bytes_ptr: *mut KernelCertTableEntry =
             bytes.as_mut_ptr() as *mut KernelCertTableEntry;
@@ -50,11 +66,12 @@ impl KernelCertTableEntry {
         unsafe { Self::parse_table(cert_bytes_ptr) }.map_err(|_| CertError::InvalidGUID)
     }
 
-    /// Parses a kernel certificate-table pointer chain into entries.
+    /// Walk a null-terminated kernel certificate-table pointer chain.
     ///
     /// # Safety
     ///
-    /// `data` must point to a valid, null-terminated kernel cert table in guest memory.
+    /// `data` must point to a valid, null-terminated kernel cert table in guest
+    /// memory with correctly sized entries and certificate payloads.
     pub unsafe fn parse_table(
         mut data: *mut KernelCertTableEntry,
     ) -> Result<Vec<CertTableEntry>, uuid::Error> {

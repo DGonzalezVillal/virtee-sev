@@ -1,8 +1,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
+//! SNP Trusted Computing Base (TCB) version encoding.
+//!
+//! [`TcbVersion`] serializes to eight bytes whose field order depends on
+//! [`Generation`](crate::types::shared::Generation): Milan/Genoa
+//! use the legacy layout; Turin/Venice add an FMC SVN byte. Always pass the
+//! correct generation to [`ByteParser::from_bytes_with`](crate::parser::ByteParser::from_bytes_with).
+
 use crate::{
     parser::{ByteParser, Decoder, Encoder},
-    types::shared::primitives::Generation,
+    types::shared::Generation,
     util::parser_helper::{validate_reserved, ReadExt, WriteExt},
 };
 use std::{

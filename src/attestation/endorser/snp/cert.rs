@@ -1,16 +1,25 @@
 // SPDX-License-Identifier: Apache-2.0
 
+//! X.509 certificate wrapper (OpenSSL backend).
+//!
+//! [`Certificate`] is the endorser's single-certificate type. It wraps
+//! `openssl::x509::X509` so chain code can stay backend-neutral at the API
+//! level while verification uses OpenSSL in [`crate::attestation::verifier::snp`].
+
 use super::*;
 
 use crate::error::CertFormatError;
 use openssl::pkey::{PKey, Public};
 use openssl::x509::X509;
 
-/// Structures/interfaces for SEV-SNP certificates.
-
+/// SNP endorsement X.509 certificate (OpenSSL-backed).
+///
+/// Parse with [`Self::from_pem`], [`Self::from_der`], or [`Self::from_bytes`].
+/// Used as elements of [`CaChain`](super::CaChain) and [`Chain`](super::Chain).
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Certificate(X509);
 
+/// PEM or DER encoding detected by [`Certificate::identify_format`].
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum CertFormat {
     Pem,
@@ -79,33 +88,32 @@ impl<'a: 'b, 'b> From<&'a Certificate> for &'b X509 {
 }
 
 impl Certificate {
-    /// Create a Certificate from a PEM-encoded X509 structure.
+    /// Parse a PEM-encoded X.509 certificate.
     pub fn from_pem(pem: &[u8]) -> Result<Self> {
         Ok(Self(X509::from_pem(pem)?))
     }
 
-    /// Serialize a Certificate struct to PEM.
+    /// Serialize to PEM.
     pub fn to_pem(&self) -> Result<Vec<u8>> {
         Ok(self.0.to_pem()?)
     }
 
-    /// Create a Certificate from a DER-encoded X509 structure.
+    /// Parse a DER-encoded X.509 certificate.
     pub fn from_der(der: &[u8]) -> Result<Self> {
         Ok(Self(X509::from_der(der)?))
     }
 
-    /// Serialize a Certificate struct to DER.
+    /// Serialize to DER.
     pub fn to_der(&self) -> Result<Vec<u8>> {
         Ok(self.0.to_der()?)
     }
 
-    /// Retrieve the underlying X509 public key for a Certificate.
+    /// Return the certificate's OpenSSL public key (for verification helpers).
     pub fn public_key(&self) -> Result<PKey<Public>> {
         Ok(self.0.public_key()?)
     }
 
-    /// Identifies the format of a certificate based upon the first twenty-seven
-    /// bytes of a byte stream. A non-PEM format assumes DER format.
+    /// Detect PEM vs DER from the first 27 bytes (`-----BEGIN CERTIFICATE-----`).
     pub fn identify_format(bytes: &[u8]) -> CertFormat {
         const PEM_START: &[u8] = b"-----BEGIN CERTIFICATE-----";
         match &bytes[0..27] {
@@ -114,7 +122,7 @@ impl Certificate {
         }
     }
 
-    /// An façade method for constructing a Certificate from raw bytes.
+    /// Parse from raw bytes, auto-detecting PEM or DER via [`Self::identify_format`].
     pub fn from_bytes(raw_bytes: &[u8]) -> Result<Self> {
         match Self::identify_format(raw_bytes) {
             CertFormat::Pem => Self::from_pem(raw_bytes),
