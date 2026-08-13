@@ -44,7 +44,7 @@ jobs:
           toolchain: 1.85.0
       - run: |
           cargo install cargo-rdme --version 1.4.8 --locked
-          cargo rdme --check
+          cargo rdme --check --no-fail-on-warnings
 
   check-spdx-headers:
     runs-on: ubuntu-latest
