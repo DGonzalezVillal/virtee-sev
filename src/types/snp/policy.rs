@@ -432,7 +432,8 @@ mod tests {
 
         let buffer = original.to_bytes().unwrap();
         // Use a recent firmware version that supports all policy bits
-        let decoded = GuestPolicy::from_bytes_with(&buffer, FirmwareVersion::new(1, 58, 0)).unwrap();
+        let decoded =
+            GuestPolicy::from_bytes_with(&buffer, FirmwareVersion::new(1, 58, 0)).unwrap();
         assert_eq!(original, decoded);
     }
     #[test]

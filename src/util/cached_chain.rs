@@ -17,7 +17,7 @@
 use crate::{
     attestation::endorser::sev::{ca::Chain as CaChain, Chain as FullChain},
     platform::Firmware,
-    sev::Certificate,
+    cert::Certificate,
     types::shared::Generation,
 };
 

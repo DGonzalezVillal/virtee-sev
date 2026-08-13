@@ -2,6 +2,6 @@
 
 //! Legacy SEV attestation verification.
 
-mod chain;
 mod cert;
+mod chain;
 mod report;

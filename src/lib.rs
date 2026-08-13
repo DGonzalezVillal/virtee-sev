@@ -53,7 +53,7 @@
 //! |------|-------------------|
 //! | Verify SNP reports (default) | `snp`, `evidence`, `verifier`, `endorser`, `crypto-openssl` |
 //! | Collect guest evidence | add `attester` |
-//! | Manage host platform (`/dev/sev`) | add `platform` |
+//! | Manage host platform (`/dev/sev`) | add `platform` (legacy SEV also needs `endorser` + `verifier`) |
 //! | Launch KVM guests | add `launch` (implies `platform`) |
 //! | First-generation SEV (pre-SNP) | add `sev`, usually with `crypto-openssl` |
 //! | Pure-Rust crypto | replace `crypto-openssl` with `crypto-rust` |
@@ -71,7 +71,7 @@
 //! | [`types`] | `sev` and/or `snp` | Shared firmware ABI wire types |
 //! | [`attestation`] | role features | RATS evidence, verification, endorsement, attestation, reference values |
 //! | [`platform`] | `platform` | Host `/dev/sev` platform management |
-//! | [`launch`] | `launch` | KVM guest bring-up (requires `platform`) |
+//! | [`launch`] | `launch` | KVM guest bring-up (requires `platform`; legacy SEV also needs `endorser` + `verifier`) |
 //! | [`error`] | always | Error types for ioctl and parsing failures |
 //! | [`parser`] | always | Encoding/decoding traits for wire types |
 //!
@@ -86,7 +86,9 @@
 //! - [`types::shared::Generation`] — EPYC product line (selects TCB layout,
 //!   built-in certificate chains, and parsing behavior)
 //! - [`types::shared::FirmwareVersion`] — major/minor/build triple
-//! - [`types::shared::launch`] — OVMF metadata, vCPU models, SEV-ES VMSA pages
+//! - [`types::shared::reference`] — offline reference-measurement wire types (`reference` feature):
+//!   OVMF metadata, QEMU vCPU models, SEV-ES VMSA pages (used by
+//!   [`attestation::reference`], not the runtime [`launch`] ioctl path)
 //!
 //! Generation-specific modules:
 //!
@@ -144,7 +146,7 @@
 //! | [`attestation::evidence::sev`] | `LegacyAttestationReport` parsing |
 //! | [`attestation::verifier::sev`] | PEK/PDH/CEK chain and report verification |
 //! | [`attestation::endorser::sev`] | Built-in ARK/ASK and certificate chains |
-//! | [`attestation::reference::sev`] | Launch digest reference calculation |
+//! | [`attestation::reference::sev`] | Legacy SEV / SEV-ES launch digest reference calculation |
 //!
 //! # Platform and launch
 //!
@@ -156,8 +158,11 @@
 //! [`Generation::identify_host_generation`] on Linux x86_64.
 //!
 //! [`launch`] adds KVM guest launch on top of `platform` (SEV and SNP launch
-//! flows). A C ABI for launch ioctls is available when `launch` is enabled
-//! (see below).
+//! flows). All launch paths initialize the KVM encrypting context with the
+//! `KVM_SEV_INIT2` ioctl. Legacy SEV launch (`launch::sev`) requires
+//! `endorser` and `verifier` in addition to `sev`, matching the legacy SEV
+//! platform APIs. A C ABI for launch ioctls is available when `launch` is
+//! enabled (see below).
 //!
 //! # Cryptographic backends
 //!
@@ -196,7 +201,9 @@
 //! [`attestation::attester`]: crate::attestation::attester
 //! [`attestation::attester::snp::Firmware`]: crate::attestation::attester::snp::Firmware
 //! [`attestation::reference`]: crate::attestation::reference
+//! [`attestation::reference::snp`]: crate::attestation::reference::snp
 //! [`attestation::reference::sev`]: crate::attestation::reference::sev
+//! [`types::shared::reference`]: crate::types::shared::reference
 //! [`platform`]: crate::platform
 //! [`platform::Firmware`]: crate::platform::Firmware
 //! [`platform::snp`]: crate::platform::snp
@@ -223,6 +230,15 @@ compile_error!(
 ))]
 compile_error!(
     "features \"verifier\", \"endorser\", and \"reference\" require \"crypto-openssl\" or \"crypto-rust\""
+);
+
+#[cfg(all(
+    feature = "sev",
+    feature = "platform",
+    not(all(feature = "endorser", feature = "verifier"))
+))]
+compile_error!(
+    "feature \"platform\" requires \"endorser\" and \"verifier\" when \"sev\" is enabled (legacy SEV host APIs use attestation::endorser::sev certificate types)"
 );
 
 #[cfg(any(feature = "sev", feature = "snp"))]
@@ -263,6 +279,3 @@ pub mod parser;
 
 #[cfg(all(feature = "sev", feature = "dangerous_hw_tests", feature = "platform"))]
 pub use util::cached_chain;
-
-#[cfg(feature = "launch")]
-use std::io::{Read, Write};

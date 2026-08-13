@@ -3,7 +3,10 @@
 use crate::parser::ByteParser;
 use crate::{
     parser::{Decoder, Encoder},
-    util::{hexline::HexLine, parser_helper::{ReadExt, WriteExt}},
+    util::{
+        hexline::HexLine,
+        parser_helper::{ReadExt, WriteExt},
+    },
 };
 
 use std::io::{self, Read, Write};

@@ -48,6 +48,7 @@ default = [
 ]
 
 # Host `/dev/sev` platform management (status, config, certificate export).
+# Legacy SEV host APIs (`platform::sev`) require `endorser` when `sev` is enabled.
 platform = []
 
 # KVM guest launch (requires host platform ioctls).

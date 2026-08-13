@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
-//! QEMU vCPU model types used at guest launch.
+//! QEMU vCPU model types for offline reference measurement.
+//!
+//! Used by [`crate::attestation::reference`] when building VMSA pages for
+//! launch digest calculation.
 
 use std::{convert::TryFrom, fmt};
 

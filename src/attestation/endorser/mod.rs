@@ -3,7 +3,8 @@
 //! Endorser: endorsement material for attestation verification.
 //!
 //! SNP certificate chains are in [`snp`](self::snp). Legacy SEV chains are in
-//! [`sev`](self::sev) (OpenSSL only).
+//! [`sev`](self::sev) (OpenSSL only), with platform certificate wire types under
+//! [`sev::cert`](self::sev::cert).
 
 #[cfg(all(
     feature = "snp",

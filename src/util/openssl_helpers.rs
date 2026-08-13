@@ -8,9 +8,10 @@
 //! big-endian internally, so these traits convert between the two conventions.
 //!
 //! Used by SNP report signature verification in
-//! [`crate::attestation::verifier::snp::ecdsa`] and by legacy SEV certificate
-//! code in [`crate::attestation::endorser::sev`] when the `sev` feature is
-//! enabled.
+//! [`crate::attestation::verifier::snp::ecdsa`] (requires `verifier`, `snp`, and
+//! `crypto-openssl`) and by legacy SEV certificate code in
+//! [`crate::attestation::endorser::sev`] (requires `endorser`, `sev`, and
+//! `crypto-openssl`).
 
 use std::io::Result;
 

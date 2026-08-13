@@ -158,7 +158,6 @@ impl Display for ReportVariant {
 mod tests {
     use super::*;
 
-
     #[test]
     fn test_version_extraction() {
         let raw_v2 = [2, 0, 0, 0]; // Version 2

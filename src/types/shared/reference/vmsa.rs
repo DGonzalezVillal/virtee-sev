@@ -1,15 +1,23 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! SEV-ES / SNP VMSA page types and builder (Linux `sev_es_work_area` layout).
+//!
+//! Used by [`crate::attestation::reference::snp`] and
+//! [`crate::attestation::reference::sev`] to build VMSA pages for launch digest
+//! calculation.
 
 use crate::{
     error::MeasurementError,
-    types::shared::launch::vcpu::CpuType,
     parser::{ByteParser, Decoder, Encoder},
     util::parser_helper::{ReadExt, WriteExt},
 };
+use super::vcpu::CpuType;
 use bitfield::bitfield;
-use std::{fmt, io::{Read, Write}, str::FromStr};
+use std::{
+    fmt,
+    io::{Read, Write},
+    str::FromStr,
+};
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};

@@ -50,7 +50,12 @@ impl std::fmt::Display for Certificate {
 
         self.encode(&mut hsh, Body).or(Err(Error))?;
 
-        write!(f, "{} {} ", crate::attestation::endorser::sev::Usage::from(key.usage), key)?;
+        write!(
+            f,
+            "{} {} ",
+            crate::attestation::endorser::sev::Usage::from(key.usage),
+            key
+        )?;
         for b in hsh.finish()?.iter() {
             write!(f, "{:02x}", *b)?;
         }

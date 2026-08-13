@@ -5,7 +5,11 @@
 //!
 //! Enable individual role features (`evidence`, `verifier`, `endorser`,
 //! `attester`, `reference`) to compile only the attestation surface you need.
-
+//!
+//! Offline launch digest wire types (OVMF, vCPU, VMSA) live in
+//! [`crate::types::shared::reference`] and are shared by
+//! [`crate::attestation::reference::snp`] and
+//! [`crate::attestation::reference::sev`].
 #[cfg(all(
     feature = "attester",
     target_os = "linux",

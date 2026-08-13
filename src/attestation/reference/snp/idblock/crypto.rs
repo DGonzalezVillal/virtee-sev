@@ -41,7 +41,9 @@ use std::convert::{TryFrom, TryInto};
 
 use crate::{
     error::IdBlockError,
-    types::snp::{SevEcdsaKeyData, SevEcdsaPubKey, SevEcdsaSig, CURVE_P384, ECDSA_POINT_SIZE_BYTES},
+    types::snp::{
+        SevEcdsaKeyData, SevEcdsaPubKey, SevEcdsaSig, CURVE_P384, ECDSA_POINT_SIZE_BYTES,
+    },
 };
 
 /// OpenSSL NID for the SECP384R1 curve required by SNP ID blocks.

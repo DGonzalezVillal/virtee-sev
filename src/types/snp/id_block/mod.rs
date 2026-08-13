@@ -30,9 +30,7 @@ mod ids;
 
 pub use auth::IdAuth;
 pub use block::IdBlock;
-pub use ecdsa::{
-    SevEcdsaKeyData, SevEcdsaPubKey, SevEcdsaSig, ECDSA_POINT_SIZE_BYTES,
-};
+pub use ecdsa::{SevEcdsaKeyData, SevEcdsaPubKey, SevEcdsaSig, ECDSA_POINT_SIZE_BYTES};
 pub use ids::{FamilyId, ImageId};
 
 /// Default ID block format version.

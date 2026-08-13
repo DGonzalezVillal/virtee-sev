@@ -1,13 +1,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! Everything needed for working with AMD SEV certificate chains.
+//!
+//! Platform PEK/PDH/CEK wire types and chains live in [`cert`](self::cert).
+//! CA and built-in generation chains are in [`ca`](self::ca) and
+//! [`builtin`](self::builtin).
 
 pub mod builtin;
 pub mod ca;
+pub mod cert;
 mod chain;
-
-#[allow(clippy::module_inception)]
-pub mod sev;
 
 #[cfg(feature = "crypto-openssl")]
 mod crypto;

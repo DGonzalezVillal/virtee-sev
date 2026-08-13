@@ -9,7 +9,9 @@ mod key;
 
 use crate::{error::SessionError, types::shared::FirmwareVersion};
 
-use super::{Header, HeaderFlags, Measurement, Policy, PolicyFlags, Secret, Session as LaunchSession, Start};
+use super::{
+    Header, HeaderFlags, Measurement, Policy, Secret, Session as LaunchSession, Start,
+};
 
 use std::io::{ErrorKind, Result};
 
@@ -98,7 +100,7 @@ impl Session<Initialized> {
         &self,
         chain: crate::attestation::endorser::sev::Chain,
     ) -> std::result::Result<Start, SessionError> {
-        use crate::attestation::endorser::sev::sev as platform;
+        use crate::attestation::endorser::sev::cert as platform;
         use crate::attestation::verifier::Verifiable;
 
         let pdh = chain.verify()?;
@@ -124,9 +126,9 @@ impl Session<Initialized> {
     /// certificate chain.
     pub fn start_pdh(
         &self,
-        pdh: crate::attestation::endorser::sev::sev::Certificate,
+        pdh: crate::attestation::endorser::sev::cert::Certificate,
     ) -> std::result::Result<Start, SessionError> {
-        use crate::attestation::endorser::sev::sev as platform;
+        use crate::attestation::endorser::sev::cert as platform;
 
         let (crt, prv) = platform::Certificate::generate(platform::Usage::PDH)?;
 
@@ -289,7 +291,9 @@ impl Session<Verified> {
 
 #[cfg(test)]
 mod initialized {
-    use super::*;
+    use super::{Initialized, Measurement, Policy, Session};
+    use super::key;
+    use crate::launch::sev::PolicyFlags;
     use crate::types::shared::FirmwareVersion;
 
     #[test]

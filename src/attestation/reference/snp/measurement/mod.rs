@@ -23,6 +23,11 @@
 //! guest configuration, store it in the ID block, and later compare it to the
 //! `measurement` field in a verified attestation report.
 //!
+//! # Wire types
+//!
+//! OVMF parsing, vCPU selection, and VMSA construction use
+//! [`crate::types::shared::reference`].
+//!
 //! # Launch digest flow
 //!
 //! ```text
@@ -57,8 +62,8 @@
 //!         snp_calc_launch_digest,
 //!         SnpMeasurementArgs,
 //!     },
-//!     types::shared::launch::vcpu::CpuType,
-//!     types::shared::launch::vmsa::GuestFeatures,
+//!     types::shared::reference::vcpu::CpuType,
+//!     types::shared::reference::vmsa::GuestFeatures,
 //! };
 //! use std::path::PathBuf;
 //!
@@ -98,7 +103,7 @@ mod update;
 use crate::{
     attestation::reference::sev_hashes::SevHashes,
     error::*,
-    types::shared::launch::{
+    types::shared::reference::{
         ovmf::OVMF,
         vcpu::CpuType,
         vmsa::{GuestFeatures, VMMType, VMSA},

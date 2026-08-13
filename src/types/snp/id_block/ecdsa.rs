@@ -51,10 +51,7 @@ impl SevEcdsaSig {
     const LEN: usize = 2 * ECDSA_POINT_SIZE_BYTES + ECDSA_SIG_RESERVED;
 
     /// Construct a signature from raw `r` and `s` components.
-    pub fn from_raw(
-        r: [u8; ECDSA_POINT_SIZE_BYTES],
-        s: [u8; ECDSA_POINT_SIZE_BYTES],
-    ) -> Self {
+    pub fn from_raw(r: [u8; ECDSA_POINT_SIZE_BYTES], s: [u8; ECDSA_POINT_SIZE_BYTES]) -> Self {
         Self {
             r,
             s,
@@ -116,10 +113,7 @@ impl SevEcdsaKeyData {
     const LEN: usize = 2 * ECDSA_POINT_SIZE_BYTES + ECDSA_PUBKEY_RESERVED;
 
     /// Construct public key coordinates from raw `qx` and `qy` values.
-    pub fn from_raw(
-        qx: [u8; ECDSA_POINT_SIZE_BYTES],
-        qy: [u8; ECDSA_POINT_SIZE_BYTES],
-    ) -> Self {
+    pub fn from_raw(qx: [u8; ECDSA_POINT_SIZE_BYTES], qy: [u8; ECDSA_POINT_SIZE_BYTES]) -> Self {
         Self {
             qx,
             qy,

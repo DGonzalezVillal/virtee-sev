@@ -37,7 +37,7 @@
 //! |-----|---------------------|
 //! | [`Firmware::open`] | `platform` (Linux) |
 //! | Shared methods | `platform` + (`sev` or `snp`) |
-//! | [`sev`](self::sev) methods | `platform` + `sev` |
+//! | [`sev`](self::sev) methods | `platform` + `sev` + `endorser` + `verifier` |
 //! | [`snp`](self::snp) methods | `platform` + `snp` |
 //!
 //! SNP platform ioctls that decode TCB fields require an explicit
@@ -62,7 +62,7 @@
 //! [`FirmwareError`](crate::error::FirmwareError) from the PSP firmware status
 //! word returned by the kernel.
 
-#[cfg(feature = "sev")]
+#[cfg(all(feature = "sev", feature = "endorser", feature = "verifier"))]
 pub mod sev;
 
 #[cfg(feature = "snp")]

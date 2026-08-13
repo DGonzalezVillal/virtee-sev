@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::attestation::endorser::sev::sev::{Certificate, EcdsaSignature};
-use crate::attestation::endorser::sev::{PublicKey, sev};
+use crate::attestation::endorser::sev::cert::{Certificate, EcdsaSignature, Usage};
+use crate::attestation::endorser::sev::PublicKey;
 use crate::attestation::evidence::sev::LegacyAttestationReport;
 use crate::attestation::verifier::Verifiable;
 
@@ -13,8 +13,8 @@ impl Verifiable for (&Certificate, &LegacyAttestationReport) {
     type Output = ();
 
     fn verify(self) -> Result<()> {
-        let sev_pub_key: PublicKey<sev::Usage> =
-            <PublicKey<sev::Usage> as TryFrom<&Certificate>>::try_from(self.0)?;
+        let sev_pub_key: PublicKey<Usage> =
+            <PublicKey<Usage> as TryFrom<&Certificate>>::try_from(self.0)?;
         let pub_key: &EcKey<Public> = &sev_pub_key.ec_key()?;
 
         let sig = EcdsaSignature::try_from(self.1.signature.as_slice())?;

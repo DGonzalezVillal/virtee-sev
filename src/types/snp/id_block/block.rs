@@ -6,7 +6,10 @@
 //! [`launch_digest`](IdBlock::launch_digest) field is the expected guest
 //! measurement (48-byte SHA-384) that must match the attestation report.
 
-use super::{DEFAULT_ID_POLICY, DEFAULT_ID_VERSION, ids::{FamilyId, ImageId}};
+use super::{
+    ids::{FamilyId, ImageId},
+    DEFAULT_ID_POLICY, DEFAULT_ID_VERSION,
+};
 use crate::{
     error::IdBlockError,
     parser::{ByteParser, Decoder, Encoder},

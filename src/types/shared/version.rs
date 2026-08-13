@@ -1,25 +1,28 @@
 // SPDX-License-Identifier: Apache-2.0
 
-//! Firmware version triple (major, minor, build) and report wire encoding.
+//! Firmware version triple (major, minor, build).
 //!
-//! [`FirmwareVersion`] is the canonical semver-style triple used in SNP
-//! attestation report bodies and decoded SEV platform status. On the wire the
-//! three bytes appear in **build, minor, major** order (little-endian fields).
-
-use crate::{
-    parser::{ByteParser, Decoder, Encoder},
-    util::parser_helper::{ReadExt, WriteExt},
-};
-use std::io::{Read, Write};
+//! [`FirmwareVersion`] is the canonical semver-style triple used in SEV platform
+//! status, SNP attestation report bodies, and as a parsing context for SNP types
+//! whose reserved-bit rules changed across firmware releases.
+//!
+//! Legacy SEV code uses the struct directly ([`FirmwareVersion::new`], ordering,
+//! [`std::fmt::Display`]). Wire [`Encoder`](crate::parser::Encoder) /
+//! [`Decoder`](crate::parser::Decoder) impls are compiled only with the `snp`
+//! feature because SEV never serializes this type through the parser stack.
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
+#[cfg(feature = "snp")]
+use crate::{
+    parser::{ByteParser, Decoder, Encoder},
+    util::parser_helper::{ReadExt, WriteExt},
+};
+#[cfg(feature = "snp")]
+use std::io::{Read, Write};
+
 /// Firmware version as major, minor, and build components.
-///
-/// Used in attestation report bodies, platform status, and as a parsing
-/// context for types whose reserved-bit rules changed across firmware releases
-/// (for example [`GuestPolicy`](crate::types::snp::GuestPolicy)).
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct FirmwareVersion {
@@ -48,6 +51,7 @@ impl std::fmt::Display for FirmwareVersion {
     }
 }
 
+#[cfg(feature = "snp")]
 impl Encoder<()> for FirmwareVersion {
     fn encode(&self, writer: &mut impl Write, _: ()) -> Result<(), std::io::Error> {
         writer.write_bytes(self.build, ())?;
@@ -57,6 +61,7 @@ impl Encoder<()> for FirmwareVersion {
     }
 }
 
+#[cfg(feature = "snp")]
 impl Decoder<()> for FirmwareVersion {
     fn decode(reader: &mut impl Read, _: ()) -> Result<Self, std::io::Error> {
         let build = reader.read_bytes()?;
@@ -70,6 +75,7 @@ impl Decoder<()> for FirmwareVersion {
     }
 }
 
+#[cfg(feature = "snp")]
 impl ByteParser<()> for FirmwareVersion {
     type Bytes = [u8; 3];
     const EXPECTED_LEN: Option<usize> = Some(3);
@@ -78,7 +84,6 @@ impl ByteParser<()> for FirmwareVersion {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::parser::ByteParser;
 
     #[test]
     fn display() {
@@ -96,33 +101,39 @@ mod tests {
         assert!(v1 < v3);
     }
 
-    #[test]
-    fn byte_parser() {
-        let bytes = [1, 2, 3];
-        let version = FirmwareVersion::from_bytes(&bytes).unwrap();
-        assert_eq!(version, FirmwareVersion::new(3, 2, 1));
+    #[cfg(feature = "snp")]
+    mod wire {
+        use super::*;
+        use crate::parser::ByteParser;
 
-        let version = FirmwareVersion::new(4, 5, 6);
-        let bytes = version.to_bytes().unwrap();
-        assert_eq!(bytes, [6, 5, 4]);
+        #[test]
+        fn byte_parser() {
+            let bytes = [1, 2, 3];
+            let version = FirmwareVersion::from_bytes(&bytes).unwrap();
+            assert_eq!(version, FirmwareVersion::new(3, 2, 1));
 
-        let original = FirmwareVersion::new(7, 8, 9);
-        let bytes = original.to_bytes().unwrap();
-        let roundtrip = FirmwareVersion::from_bytes(&bytes).unwrap();
-        assert_eq!(original, roundtrip);
+            let version = FirmwareVersion::new(4, 5, 6);
+            let bytes = version.to_bytes().unwrap();
+            assert_eq!(bytes, [6, 5, 4]);
 
-        assert_eq!(
-            <FirmwareVersion as Default>::default(),
-            FirmwareVersion::new(0, 0, 0)
-        );
-    }
+            let original = FirmwareVersion::new(7, 8, 9);
+            let bytes = original.to_bytes().unwrap();
+            let roundtrip = FirmwareVersion::from_bytes(&bytes).unwrap();
+            assert_eq!(original, roundtrip);
 
-    #[test]
-    fn edge_cases() {
-        let version = FirmwareVersion::new(255, 255, 255);
-        assert_eq!(version.to_bytes().unwrap(), [255, 255, 255]);
+            assert_eq!(
+                <FirmwareVersion as Default>::default(),
+                FirmwareVersion::new(0, 0, 0)
+            );
+        }
 
-        let version = FirmwareVersion::new(0, 255, 0);
-        assert_eq!(version.to_bytes().unwrap(), [0, 255, 0]);
+        #[test]
+        fn edge_cases() {
+            let version = FirmwareVersion::new(255, 255, 255);
+            assert_eq!(version.to_bytes().unwrap(), [255, 255, 255]);
+
+            let version = FirmwareVersion::new(0, 255, 0);
+            assert_eq!(version.to_bytes().unwrap(), [0, 255, 0]);
+        }
     }
 }

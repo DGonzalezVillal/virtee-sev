@@ -7,7 +7,7 @@
 //! (Platform Endorsement Key) and PDH (Platform Diffie-Hellman) workflow
 //! defined in the AMD SEV API specification.
 //!
-//! Requires the `sev` and `platform` features. Not used for SEV-SNP attestation
+//! Requires the `sev`, `platform`, `endorser`, and `verifier` features. Not used for SEV-SNP attestation
 //! report verification — see [`crate::attestation::endorser::snp`] and
 //! [`crate::attestation::verifier::snp`] for SNP endorsement material.
 //!
@@ -41,7 +41,7 @@ pub use crate::types::sev::{PlatformStatusFlags, State, Status, Version};
 use super::Firmware;
 
 #[cfg(target_os = "linux")]
-use crate::attestation::endorser::sev::sev::{Certificate, Chain};
+use crate::attestation::endorser::sev::cert::{Certificate, Chain};
 
 #[cfg(target_os = "linux")]
 use crate::error::*;

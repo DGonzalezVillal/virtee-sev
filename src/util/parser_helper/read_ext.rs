@@ -28,6 +28,7 @@ pub trait ReadExt: Read {
     /// Use when the wire layout depends on [`Generation`](crate::types::shared::Generation),
     /// [`FirmwareVersion`](crate::types::shared::FirmwareVersion), or another
     /// decode context (for example [`TcbVersion`](crate::types::snp::TcbVersion)).
+    #[cfg(feature = "snp")]
     fn read_bytes_with<T, P>(&mut self, params: P) -> Result<T, std::io::Error>
     where
         Self: Sized,

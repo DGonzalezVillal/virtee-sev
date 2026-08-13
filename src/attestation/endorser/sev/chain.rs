@@ -16,12 +16,12 @@ pub struct Chain {
     pub ca: ca::Chain,
 
     /// The SEV platform chain.
-    pub sev: sev::Chain,
+    pub sev: cert::Chain,
 }
 
 impl Decoder<()> for Chain {
     fn decode(mut reader: &mut impl Read, _: ()) -> Result<Self> {
-        let sev = sev::Chain::decode(&mut reader, ())?;
+        let sev = cert::Chain::decode(&mut reader, ())?;
         let ca = ca::Chain::decode(&mut reader, ())?;
         Ok(Self { ca, sev })
     }

@@ -4,12 +4,12 @@ use super::*;
 
 #[test]
 fn decode() {
-    sev::Certificate::decode(&mut &CEK[..], ()).unwrap();
+    cert::Certificate::decode(&mut &CEK[..], ()).unwrap();
 }
 
 #[test]
 fn encode() {
-    let cek = sev::Certificate::decode(&mut &CEK[..], ()).unwrap();
+    let cek = cert::Certificate::decode(&mut &CEK[..], ()).unwrap();
 
     let mut output = Vec::new();
     cek.encode(&mut output, ()).unwrap();
@@ -26,7 +26,7 @@ fn verify() {
     let mut mut_ask = ASK;
 
     let ask = ca::Certificate::decode(&mut mut_ask, ()).unwrap();
-    let cek = sev::Certificate::decode(&mut mut_cek, ()).unwrap();
+    let cek = cert::Certificate::decode(&mut mut_cek, ()).unwrap();
 
     (&ask, &cek).verify().unwrap();
     // assert!((&cek, &ask).verify().is_err());

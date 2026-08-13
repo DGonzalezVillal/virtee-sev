@@ -1,15 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
-#[cfg(all(feature = "sev", feature = "platform", target_os = "linux"))]
+#[cfg(all(feature = "sev", feature = "platform", feature = "endorser", feature = "verifier", target_os = "linux"))]
 mod sev {
     #[cfg(feature = "dangerous_hw_tests")]
     use serial_test::serial;
     #[cfg(feature = "dangerous_hw_tests")]
     use sev::cached_chain;
     use sev::{
-        attestation::endorser::sev::sev::Usage,
-        platform::Firmware,
-        types::shared::FirmwareVersion,
+        attestation::endorser::sev::cert::Usage, platform::Firmware, types::shared::FirmwareVersion,
     };
 
     #[cfg(feature = "dangerous_hw_tests")]
@@ -27,9 +25,7 @@ mod sev {
     fn platform_status() {
         let mut fw = Firmware::open().unwrap();
         let status = fw.platform_status().unwrap();
-        assert!(
-            status.firmware_version > FirmwareVersion::new(0, 14, 0)
-        );
+        assert!(status.firmware_version > FirmwareVersion::new(0, 14, 0));
     }
 
     #[cfg(feature = "dangerous_hw_tests")]
@@ -82,7 +78,7 @@ mod sev {
     #[test]
     #[serial]
     fn pek_cert_import() {
-        use sev::attestation::endorser::sev::{sev::Certificate, Signer};
+        use sev::attestation::endorser::sev::{cert::Certificate, Signer};
         use sev::attestation::verifier::Verifiable;
 
         let mut fw = Firmware::open().unwrap();
@@ -114,7 +110,10 @@ mod sev {
 #[cfg(all(feature = "snp", feature = "platform", target_os = "linux"))]
 mod snp {
     use serial_test::serial;
-    use sev::platform::{snp::{Config, MaskId, SnpPlatformStatus, TcbVersion}, Firmware};
+    use sev::platform::{
+        snp::{Config, MaskId, SnpPlatformStatus, TcbVersion},
+        Firmware,
+    };
     use sev::types::shared::Generation;
 
     fn host_generation() -> Generation {
@@ -186,7 +185,8 @@ mod snp {
     fn set_config_generation() {
         let mut fw: Firmware = Firmware::open().unwrap();
 
-        fw.snp_set_config(Config::default(), host_generation()).unwrap();
+        fw.snp_set_config(Config::default(), host_generation())
+            .unwrap();
     }
 
     #[cfg_attr(not(all(host, feature = "dangerous_hw_tests")), ignore)]

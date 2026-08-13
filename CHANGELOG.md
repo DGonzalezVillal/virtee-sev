@@ -59,8 +59,9 @@ All notable changes to this project will be documented in this file.
   `attestation::reference::snp::measurement` for SNP ID block and launch
   digest reference calculation. Shared helpers (`sev_hashes`) live directly
   under `attestation::reference`.
-- Moved guest launch types into `snp::types::launch` (OVMF metadata layouts,
-  QEMU vCPU models, OVMF firmware parsing, and SEV-ES VMSA save-area pages).
+- Moved guest launch wire types into `types::shared::reference` (OVMF metadata
+  layouts, QEMU vCPU models, OVMF firmware parsing, and SEV-ES VMSA save-area
+  pages). Requires the `reference` feature.
 - Introduced the `platform` module for host platform management (`/dev/sev`).
   Low-level Linux ioctl definitions remain internal under `firmware`.
 - Moved legacy SEV certificate chains into `attestation::endorser::sev` and
@@ -69,6 +70,24 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
+- Gated SNP-only [`parser_helper`] helpers (`validate_reserved`,
+  `ReadExt::read_bytes_with`) behind the `snp` feature so `sev` + `reference`
+  builds compile without dead-code warnings.
+- Gated [`openssl_helpers`] behind `crypto-openssl` plus either SNP verification
+  (`verifier` + `snp`) or legacy SEV endorsement (`endorser` + `sev`).
+- Flattened legacy SEV platform certificate types from
+  `attestation::endorser::sev::sev::cert` into
+  [`attestation::endorser::sev::cert`](crate::attestation::endorser::sev::cert).
+- KVM guest launch (SEV, SEV-ES, and SNP) initializes the encrypting context
+  through the `KVM_SEV_INIT2` ioctl exclusively.
+- Legacy SEV host platform APIs (`platform` + `sev`) require `endorser` and
+  `verifier` for PEK/PDH certificate types. The same requirement applies to
+  `launch` + `sev` (`compile_error!` when `platform` or `launch` is enabled
+  without both attestation features).
+- Moved offline reference-measurement wire types from `types::shared::launch`
+  to [`types::shared::reference`](crate::types::shared::reference) (`ovmf`, `vcpu`,
+  `vmsa`). These types are consumed by [`attestation::reference`], not the
+  runtime [`launch`](crate::launch) ioctl path.
 - Removed `types::sev::Build`; use [`FirmwareVersion`](crate::types::shared::FirmwareVersion)
   for the major/minor/build triple. `types::sev::Version` remains the
   major/minor pair for ioctl and certificate layouts. `Status::firmware_version`
@@ -120,7 +139,7 @@ All notable changes to this project will be documented in this file.
   ECDSA wire layouts). OpenSSL conversions remain in
   `attestation::reference`.
 - Moved QEMU vCPU model types (`CpuType`, `cpu_sig`) into
-  `snp::types::launch::vcpu`. Removed `attestation::reference::vcpu_types`.
+  `types::shared::reference::vcpu`. Removed `attestation::reference::vcpu_types`.
 - Reorganized `attestation::reference::snp` into `reference::snp::idblock`
   and `reference::snp::measurement`. `IdMeasurements` lives in
   `reference::snp::idblock`; wire types remain in `snp::types`. Removed
@@ -129,9 +148,14 @@ All notable changes to this project will be documented in this file.
   `reference::sev`. Shared helpers (`sev_hashes`, `digest`) live directly
   under `attestation::reference`.
 - Removed the unused top-level `vmsa` module (superseded by
-  `snp::types::launch::vmsa`).
+  `types::shared::reference::vmsa`).
 - Removed legacy `sev` from the crate's default features. Defaults are now
   `snp` only, so SNP attestation and verification can be built on non-x86_64
   targets without pulling in first-generation SEV code. Enable the `sev`
   feature explicitly for the full pre-SNP stack: platform APIs, certificate and
   attestation report verification, launch, and session.
+
+### Removed
+
+- Removed deprecated launch ioctls `_INIT` and `_ES_INIT` and the unused legacy
+  init marker types for KVM platform setup (superseded by `KVM_SEV_INIT2`).

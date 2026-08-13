@@ -29,7 +29,7 @@ use super::gctx::{Gctx, Updating};
 use crate::{
     attestation::reference::sev_hashes::SevHashes,
     error::MeasurementError,
-    types::shared::launch::{
+    types::shared::reference::{
         ovmf::{OVMF, OvmfSevMetadataSectionDesc, SectionType},
         vmsa::VMMType,
     },

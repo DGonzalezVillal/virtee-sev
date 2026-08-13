@@ -11,8 +11,8 @@
 //! assemble `(algorithm, body, signature, vek)` from a parsed
 //! [`Report`](crate::attestation::evidence::snp::Report).
 
-use crate::attestation::evidence::snp::SignatureAlgorithm;
 use crate::attestation::endorser::snp::Certificate;
+use crate::attestation::evidence::snp::SignatureAlgorithm;
 use crate::attestation::verifier::Verifiable;
 
 use super::ecdsa;

@@ -5,14 +5,14 @@
 //! Structures for first-generation SEV platform key provisioning ioctls:
 //! Platform Endorsement Key (PEK) and Platform Diffie-Hellman (PDH) operations.
 //!
-//! Requires the `sev` feature. Public wrappers are in
+//! Requires the `sev`, `platform`, `endorser`, and `verifier` features. Public wrappers are in
 //! [`crate::platform::sev`].
 //!
 //! Shared legacy/SNP payloads ([`PlatformStatus`], [`GetId`]) live in
 //! [`super::shared`].
 
 #[cfg(target_os = "linux")]
-use crate::attestation::endorser::sev::sev;
+use crate::attestation::endorser::sev::cert;
 
 #[cfg(target_os = "linux")]
 use std::marker::PhantomData;
@@ -32,7 +32,7 @@ pub struct PekGen;
 
 /// Request PEK certificate signing (CSR) payload.
 ///
-/// Points at a legacy SEV [`Certificate`](crate::attestation::endorser::sev::sev::Certificate)
+/// Points at a legacy SEV [`Certificate`](crate::attestation::endorser::sev::cert::Certificate)
 /// buffer the kernel fills. See chapter 5.8, table 27.
 #[repr(C, packed)]
 #[cfg(target_os = "linux")]
@@ -45,7 +45,7 @@ pub struct PekCsr<'a> {
 #[cfg(target_os = "linux")]
 impl<'a> PekCsr<'a> {
     /// Build a CSR payload referencing a certificate buffer.
-    pub fn new(cert: &'a mut sev::Certificate) -> Self {
+    pub fn new(cert: &'a mut cert::Certificate) -> Self {
         Self {
             addr: cert as *mut _ as _,
             len: std::mem::size_of_val(cert) as _,
@@ -70,7 +70,7 @@ pub struct PekCertImport<'a> {
 #[cfg(target_os = "linux")]
 impl<'a> PekCertImport<'a> {
     /// Build an import payload from PEK and OCA certificate buffers.
-    pub fn new(pek: &'a sev::Certificate, oca: &'a sev::Certificate) -> Self {
+    pub fn new(pek: &'a cert::Certificate, oca: &'a cert::Certificate) -> Self {
         Self {
             pek_addr: pek as *const _ as _,
             pek_len: std::mem::size_of_val(pek) as _,
@@ -103,7 +103,7 @@ pub struct PdhCertExport<'a> {
 #[cfg(target_os = "linux")]
 impl<'a> PdhCertExport<'a> {
     /// Build an export payload referencing PDH and a three-certificate chain buffer.
-    pub fn new(pdh: &'a mut sev::Certificate, certs: &'a mut [sev::Certificate; 3]) -> Self {
+    pub fn new(pdh: &'a mut cert::Certificate, certs: &'a mut [cert::Certificate; 3]) -> Self {
         Self {
             pdh_addr: pdh as *mut _ as _,
             pdh_len: std::mem::size_of_val(pdh) as _,

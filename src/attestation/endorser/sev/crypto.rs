@@ -4,9 +4,9 @@ use super::*;
 
 use std::fmt::{Debug, Formatter};
 
-#[cfg(target_os = "linux")]
+#[cfg(all(feature = "launch", target_os = "linux"))]
 impl<U> PrivateKey<U> {
-    pub(crate) fn derive(&self, cert: &sev::Certificate) -> Result<Vec<u8>> {
+    pub(crate) fn derive(&self, cert: &cert::Certificate) -> Result<Vec<u8>> {
         let key = PublicKey::try_from(cert)?;
         let mut der = derive::Deriver::new(&self.key)?;
         der.set_peer(&key.key)?;
@@ -42,7 +42,7 @@ macro_rules! prv_decoder {
 }
 
 prv_decoder! {
-    sev::Certificate => sev::Usage,
+    cert::Certificate => cert::Usage,
     ca::Certificate => ca::Usage
 }
 

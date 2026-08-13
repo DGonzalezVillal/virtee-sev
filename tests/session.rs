@@ -2,10 +2,16 @@
 
 #![cfg(feature = "crypto-openssl")]
 
-#[cfg(all(target_os = "linux", feature = "sev", feature = "launch", feature = "verifier"))]
+#[cfg(all(
+    target_os = "linux",
+    feature = "sev",
+    feature = "launch",
+    feature = "verifier"
+))]
 mod initialized {
     use ::sev::{
-        attestation::endorser::sev::builtin::naples::*, attestation::endorser::sev::*, attestation::verifier::Verifiable, launch, launch::sev::session::Session, parser::Decoder,
+        attestation::endorser::sev::builtin::naples::*, attestation::endorser::sev::*,
+        attestation::verifier::Verifiable, launch, launch::sev::session::Session, parser::Decoder,
     };
     use std::convert::*;
 
@@ -28,11 +34,11 @@ mod initialized {
                     ark: ca::Certificate::decode(&mut &ARK[..], ()).unwrap(),
                     ask: ca::Certificate::decode(&mut &ASK[..], ()).unwrap(),
                 },
-                sev: sev::Chain {
-                    cek: sev::Certificate::decode(&mut &CEK[..], ()).unwrap(),
-                    oca: sev::Certificate::decode(&mut &OCA[..], ()).unwrap(),
-                    pek: sev::Certificate::decode(&mut &PEK[..], ()).unwrap(),
-                    pdh: sev::Certificate::decode(&mut &PDH[..], ()).unwrap(),
+                sev: cert::Chain {
+                    cek: cert::Certificate::decode(&mut &CEK[..], ()).unwrap(),
+                    oca: cert::Certificate::decode(&mut &OCA[..], ()).unwrap(),
+                    pek: cert::Certificate::decode(&mut &PEK[..], ()).unwrap(),
+                    pdh: cert::Certificate::decode(&mut &PDH[..], ()).unwrap(),
                 },
             })
             .unwrap();

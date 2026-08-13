@@ -54,7 +54,10 @@ use crate::error::*;
 #[cfg(target_os = "linux")]
 use crate::firmware::host::{
     ioctl::*,
-    types::{SnpCommit, SnpPlatformStatus as FFISnpPlatformStatus, SnpSetConfig, SnpVlekLoad, WrappedVlekHashstick as FFIWrappedVlekHashstick},
+    types::{
+        SnpCommit, SnpPlatformStatus as FFISnpPlatformStatus, SnpSetConfig, SnpVlekLoad,
+        WrappedVlekHashstick as FFIWrappedVlekHashstick,
+    },
 };
 
 #[cfg(target_os = "linux")]

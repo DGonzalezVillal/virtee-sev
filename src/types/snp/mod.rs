@@ -15,6 +15,9 @@
 //! | Platform | [`platform`](self::platform), [`MaskId`](platform_config::MaskId) | [`crate::platform::snp`] |
 //! | Guest keys | [`DerivedKey`](derived_key::DerivedKey), [`GuestFieldSelect`](derived_key::GuestFieldSelect) | [`crate::attestation::attester::snp`] |
 //!
+//! Offline reference-measurement wire types (OVMF, vCPU, VMSA) live in
+//! [`crate::types::shared::reference`].
+//!
 //! # Parsing notes
 //!
 //! - Most types use [`ByteParser`](crate::parser::ByteParser) with `()` context.
@@ -43,8 +46,8 @@ pub use cert::CertType;
 pub use cert_table::{CertTableEntry, RawData};
 pub use derived_key::{DerivedKey, GuestFieldSelect};
 pub use id_block::{
-    FamilyId, IdAuth, IdBlock, ImageId, SevEcdsaKeyData, SevEcdsaPubKey, SevEcdsaSig,
-    CURVE_P384, ECDSA_POINT_SIZE_BYTES,
+    FamilyId, IdAuth, IdBlock, ImageId, SevEcdsaKeyData, SevEcdsaPubKey, SevEcdsaSig, CURVE_P384,
+    ECDSA_POINT_SIZE_BYTES,
 };
 pub use launch_digest::{SnpLaunchDigest, LD_BITS, LD_BYTES};
 pub use page_type::PageType;

@@ -7,6 +7,11 @@
 //! attestation reports to match — nothing here runs inside the guest or
 //! verifies evidence at runtime.
 //!
+//! # Wire types
+//!
+//! OVMF parsing, vCPU selection, and VMSA construction use
+//! [`crate::types::shared::reference`].
+//!
 //! # Submodules
 //!
 //! | Module | Purpose | Main APIs |
@@ -54,7 +59,7 @@
 //!         snp_calc_launch_digest,
 //!         SnpMeasurementArgs,
 //!     },
-//!     types::shared::launch::{vcpu::CpuType, vmsa::GuestFeatures},
+//!     types::shared::reference::{vcpu::CpuType, vmsa::GuestFeatures},
 //! };
 //! use std::path::PathBuf;
 //!

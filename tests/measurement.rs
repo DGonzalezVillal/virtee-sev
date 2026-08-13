@@ -6,8 +6,8 @@
 mod snp_tests {
     use sev::{
         attestation::reference::snp::*,
-        types::shared::launch::vcpu::CpuType,
-        types::shared::launch::vmsa::{GuestFeatures, VMMType},
+        types::shared::reference::vcpu::CpuType,
+        types::shared::reference::vmsa::{GuestFeatures, VMMType},
     };
 
     // Test if we can compute a full LD from a pre generated hash using snp only kernel
@@ -367,7 +367,7 @@ mod snp_tests {
 mod sev_tests {
     use sev::{
         attestation::reference::sev::*,
-        types::shared::launch::vcpu::CpuType,
+        types::shared::reference::vcpu::CpuType,
     };
     // test regular sev-es
     #[test]

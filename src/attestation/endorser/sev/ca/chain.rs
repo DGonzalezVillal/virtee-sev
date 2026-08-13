@@ -46,25 +46,30 @@ impl From<crate::types::shared::Generation> for Chain {
     fn from(generation: crate::types::shared::Generation) -> Self {
         let (ark, ask) = match generation {
             #[cfg(feature = "sev")]
-            crate::types::shared::Generation::Naples => {
-                (super::super::builtin::naples::ARK, super::super::builtin::naples::ASK)
-            }
+            crate::types::shared::Generation::Naples => (
+                super::super::builtin::naples::ARK,
+                super::super::builtin::naples::ASK,
+            ),
             #[cfg(feature = "sev")]
-            crate::types::shared::Generation::Rome => {
-                (super::super::builtin::rome::ARK, super::super::builtin::rome::ASK)
-            }
+            crate::types::shared::Generation::Rome => (
+                super::super::builtin::rome::ARK,
+                super::super::builtin::rome::ASK,
+            ),
             #[cfg(any(feature = "sev", feature = "snp"))]
-            crate::types::shared::Generation::Milan => {
-                (super::super::builtin::milan::ARK, super::super::builtin::milan::ASK)
-            }
+            crate::types::shared::Generation::Milan => (
+                super::super::builtin::milan::ARK,
+                super::super::builtin::milan::ASK,
+            ),
             #[cfg(any(feature = "sev", feature = "snp"))]
-            crate::types::shared::Generation::Genoa => {
-                (super::super::builtin::genoa::ARK, super::super::builtin::genoa::ASK)
-            }
+            crate::types::shared::Generation::Genoa => (
+                super::super::builtin::genoa::ARK,
+                super::super::builtin::genoa::ASK,
+            ),
             #[cfg(any(feature = "sev", feature = "snp"))]
-            crate::types::shared::Generation::Turin => {
-                (super::super::builtin::turin::ARK, super::super::builtin::turin::ASK)
-            }
+            crate::types::shared::Generation::Turin => (
+                super::super::builtin::turin::ARK,
+                super::super::builtin::turin::ASK,
+            ),
             #[cfg(any(feature = "sev", feature = "snp"))]
             crate::types::shared::Generation::Venice => {
                 panic!("Venice SEV CA chain is not yet implemented")

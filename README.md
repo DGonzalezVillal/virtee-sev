@@ -53,7 +53,7 @@ Common opt-in profiles:
 |------|-------------------|
 | Verify SNP reports (default) | `snp`, `evidence`, `verifier`, `endorser`, `crypto-openssl` |
 | Collect guest evidence | add `attester` |
-| Manage host platform (`/dev/sev`) | add `platform` |
+| Manage host platform (`/dev/sev`) | add `platform` (legacy SEV also needs `endorser` + `verifier`) |
 | Launch KVM guests | add `launch` (implies `platform`) |
 | First-generation SEV (pre-SNP) | add `sev`, usually with `crypto-openssl` |
 | Pure-Rust crypto | replace `crypto-openssl` with `crypto-rust` |
@@ -71,7 +71,7 @@ sev = { version = "7", default-features = false, features = ["snp", "verifier", 
 | [`types`](https://docs.rs/sev/latest/sev/types/) | `sev` and/or `snp` | Shared firmware ABI wire types |
 | [`attestation`](https://docs.rs/sev/latest/sev/attestation/) | role features | RATS evidence, verification, endorsement, attestation, reference values |
 | [`platform`](https://docs.rs/sev/latest/sev/platform/) | `platform` | Host `/dev/sev` platform management |
-| [`launch`](https://docs.rs/sev/latest/sev/launch/) | `launch` | KVM guest bring-up (requires `platform`) |
+| [`launch`](https://docs.rs/sev/latest/sev/launch/) | `launch` | KVM guest bring-up (requires `platform`; legacy SEV also needs `endorser` + `verifier`) |
 | [`error`](https://docs.rs/sev/latest/sev/error/) | always | Error types for ioctl and parsing failures |
 | [`parser`](https://docs.rs/sev/latest/sev/parser/) | always | Encoding/decoding traits for wire types |
 
@@ -84,7 +84,7 @@ device APIs are [`platform::Firmware`](https://docs.rs/sev/latest/sev/platform/s
 
 - [`Generation`](https://docs.rs/sev/latest/sev/types/shared/enum.Generation.html) — EPYC product line (selects TCB layout, built-in certificate chains, and parsing behavior)
 - [`FirmwareVersion`](https://docs.rs/sev/latest/sev/types/shared/struct.FirmwareVersion.html) — major/minor/build triple
-- [`types::shared::launch`](https://docs.rs/sev/latest/sev/types/shared/launch/) — OVMF metadata, vCPU models, SEV-ES VMSA pages
+- [`types::shared::reference`](https://docs.rs/sev/latest/sev/types/shared/reference/) — offline reference-measurement wire types (`reference` feature): OVMF metadata, QEMU vCPU models, SEV-ES VMSA pages (used by [`attestation::reference`](https://docs.rs/sev/latest/sev/attestation/reference/), not the runtime [`launch`](https://docs.rs/sev/latest/sev/launch/) ioctl path)
 
 Generation-specific modules:
 
@@ -138,7 +138,7 @@ With `feature = "sev"`, the same [`attestation`](https://docs.rs/sev/latest/sev/
 
 [`platform::Firmware`](https://docs.rs/sev/latest/sev/platform/struct.Firmware.html) opens `/dev/sev`. Shared ioctls (legacy SEV and SNP): platform status and CPU identifier export. SNP-specific ioctls (status, commit, config, VLEK load) live under [`platform::snp`](https://docs.rs/sev/latest/sev/platform/snp/) and require an explicit [`Generation`](https://docs.rs/sev/latest/sev/types/shared/enum.Generation.html) because TCB byte layout varies by CPU generation. Optional host CPUID detection is available via [`Generation::identify_host_generation`](https://docs.rs/sev/latest/sev/types/shared/enum.Generation.html#method.identify_host_generation) on Linux x86_64.
 
-[`launch`](https://docs.rs/sev/latest/sev/launch/) adds KVM guest launch on top of `platform` (SEV and SNP launch flows). A C ABI for launch ioctls is available when `launch` is enabled (see below).
+[`launch`](https://docs.rs/sev/latest/sev/launch/) adds KVM guest launch on top of `platform` (SEV and SNP launch flows). All launch paths initialize the KVM encrypting context with the `KVM_SEV_INIT2` ioctl. Legacy SEV launch ([`launch::sev`](https://docs.rs/sev/latest/sev/launch/sev/)) requires `endorser` and `verifier` in addition to `sev`, matching the legacy SEV platform APIs. A C ABI for launch ioctls is available when `launch` is enabled (see below).
 
 ## Cryptographic backends
 

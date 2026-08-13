@@ -9,8 +9,8 @@
 //! | Module | Types | Role |
 //! |--------|-------|------|
 //! | [`generation`](self::generation) | [`Generation`], [`CpuFamily`](Generation), [`CpuModel`](Generation) | EPYC product line; selects TCB layout and built-in cert chains |
-//! | [`version`](self::version) | [`FirmwareVersion`] | Major/minor/build triple in reports and platform status |
-//! | [`launch`](self::launch) | OVMF, vCPU, VMSA types | Guest launch metadata for reference measurement |
+//! | [`version`](self::version) | [`FirmwareVersion`] | Major/minor/build triple (wire parsing with `snp` only) |
+//! | [`reference`](self::reference) | OVMF, vCPU, VMSA types | Offline launch digest wire types (`reference` feature) |
 //!
 //! # Generation parameter
 //!
@@ -20,7 +20,8 @@
 //! [`Generation::identify_host_generation`](Generation::identify_host_generation).
 
 pub mod generation;
-pub mod launch;
+#[cfg(all(feature = "reference", any(feature = "sev", feature = "snp")))]
+pub mod reference;
 pub mod version;
 
 pub use generation::Generation;

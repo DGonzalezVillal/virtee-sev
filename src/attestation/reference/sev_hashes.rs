@@ -374,7 +374,7 @@ impl SevHashes {
     ///
     /// Places the padded hash table at `offset` within a zero-filled 4096-byte
     /// page. The offset comes from the OVMF metadata GPA
-    /// ([`OVMF::sev_hashes_table_gpa`](crate::types::shared::launch::ovmf::OVMF::sev_hashes_table_gpa))
+    /// ([`OVMF::sev_hashes_table_gpa`](crate::types::shared::reference::ovmf::OVMF::sev_hashes_table_gpa))
     /// and is used when measuring the `SNP_KERNEL_HASHES` section.
     ///
     /// # Arguments

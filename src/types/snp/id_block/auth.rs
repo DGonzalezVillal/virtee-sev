@@ -5,7 +5,10 @@
 //! Carries ECDSA P-384 signatures and public keys that authorize an
 //! [`IdBlock`](super::IdBlock). Submitted alongside the ID block at launch.
 
-use super::{ecdsa::{SevEcdsaPubKey, SevEcdsaSig}, DEFAULT_KEY_ALGO};
+use super::{
+    ecdsa::{SevEcdsaPubKey, SevEcdsaSig},
+    DEFAULT_KEY_ALGO,
+};
 use crate::{
     parser::{ByteParser, Decoder, Encoder},
     util::parser_helper::{ReadExt, WriteExt},

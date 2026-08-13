@@ -55,7 +55,10 @@
 
 mod verifiable;
 
-#[cfg(all(feature = "snp", any(feature = "crypto-openssl", feature = "crypto-rust")))]
+#[cfg(all(
+    feature = "snp",
+    any(feature = "crypto-openssl", feature = "crypto-rust")
+))]
 pub mod snp;
 
 #[cfg(all(feature = "sev", feature = "crypto-openssl"))]

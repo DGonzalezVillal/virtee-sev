@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! OVMF SEV metadata wire types and firmware image parser.
+//!
+//! Used by [`crate::attestation::reference`] to parse firmware images when
+//! computing launch digests offline.
 
 use crate::{
     error::{MeasurementError, OVMFError},

@@ -11,15 +11,17 @@
 //!
 //! ```text
 //! types/
-//!   shared/     Generation, FirmwareVersion, launch metadata (SEV + SNP)
-//!   snp/        SNP attestation, launch, platform, derived-key types
+//!   shared/     Generation, FirmwareVersion, reference wire types (SEV + SNP)
+//!     reference/  OVMF, vCPU, VMSA (reference feature)
+//!   snp/        SNP attestation, launch, platform types
 //!   sev/        Legacy SEV platform status (sev feature)
 //! ```
 //!
 //! | Module | Feature | Used by |
 //! |--------|---------|---------|
-//! | [`shared`](self::shared) | `sev` or `snp` | Platform, attestation, reference measurement |
-//! | [`snp`](self::snp) | `snp` | SNP launch, attestation, platform, reference |
+//! | [`shared`](self::shared) | `sev` or `snp` | Platform, attestation, reference wire types |
+//! | [`shared::reference`](crate::types::shared::reference) | `reference` + (`sev` or `snp`) | OVMF, vCPU, VMSA wire types for offline measurement |
+//! | [`snp`](self::snp) | `snp` | SNP launch, attestation, platform |
 //! | [`sev`](self::sev) | `sev` | Legacy SEV platform and launch |
 //!
 //! # Parsing
@@ -42,7 +44,8 @@
 //! | Host `/dev/sev` API | [`crate::platform`] |
 //! | Guest `/dev/sev-guest` API | [`crate::attestation::attester::snp`] |
 //! | Attestation evidence | [`crate::attestation::evidence::snp`] |
-//! | Launch digest calculation | [`crate::attestation::reference::snp`] |
+//! | Launch digest calculation | [`crate::attestation::reference`] |
+//! | OVMF / VMSA wire types | [`crate::types::shared::reference`] |
 
 #[cfg(any(feature = "sev", feature = "snp"))]
 pub mod shared;

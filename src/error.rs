@@ -7,8 +7,6 @@
 //! level modules define focused enums such as [`CertError`] and
 //! [`HashstickError`] that convert into [`UserApiError`] where appropriate.
 
-#[cfg(feature = "crypto-openssl")]
-use openssl::error::ErrorStack;
 use std::{
     array::TryFromSliceError,
     convert::From,
@@ -16,6 +14,9 @@ use std::{
     fmt::{Debug, Display},
     io,
 };
+
+#[cfg(all(feature = "crypto-openssl", feature = "sev"))]
+use openssl::error::ErrorStack;
 
 #[cfg(all(feature = "crypto-openssl", feature = "sev"))]
 use rdrand::ErrorCode;

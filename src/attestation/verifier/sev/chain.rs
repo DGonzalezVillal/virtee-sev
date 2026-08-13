@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::attestation::endorser::sev::{ca, sev, Chain};
+use crate::attestation::endorser::sev::{ca, cert, Chain};
 use crate::attestation::verifier::Verifiable;
 
 use std::io::Result;
@@ -15,8 +15,8 @@ impl<'a> Verifiable for &'a ca::Chain {
     }
 }
 
-impl<'a> Verifiable for &'a sev::Chain {
-    type Output = &'a sev::Certificate;
+impl<'a> Verifiable for &'a cert::Chain {
+    type Output = &'a cert::Certificate;
 
     fn verify(self) -> Result<Self::Output> {
         (&self.oca, &self.oca).verify()?;
@@ -28,7 +28,7 @@ impl<'a> Verifiable for &'a sev::Chain {
 }
 
 impl<'a> Verifiable for &'a Chain {
-    type Output = &'a sev::Certificate;
+    type Output = &'a cert::Certificate;
 
     fn verify(self) -> Result<Self::Output> {
         let ask = self.ca.verify()?;

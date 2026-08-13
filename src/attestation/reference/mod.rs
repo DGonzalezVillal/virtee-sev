@@ -7,6 +7,9 @@
 //! should match later. Nothing here collects guest evidence or verifies reports;
 //! see [`crate::attestation::attester`] and [`crate::attestation::verifier`].
 //!
+//! Wire types for offline reference measurement live in
+//! [`crate::types::shared::reference`].
+//!
 //! # Module layout
 //!
 //! | Module | Role | Used by |
