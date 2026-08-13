@@ -30,7 +30,7 @@ use crate::{
     attestation::reference::sev_hashes::SevHashes,
     error::MeasurementError,
     types::shared::reference::{
-        ovmf::{OVMF, OvmfSevMetadataSectionDesc, SectionType},
+        ovmf::{OvmfSevMetadataSectionDesc, SectionType, OVMF},
         vmsa::VMMType,
     },
     types::snp::PageType,

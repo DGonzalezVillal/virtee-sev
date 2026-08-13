@@ -365,10 +365,7 @@ mod snp_tests {
 
 #[cfg(all(target_os = "linux", feature = "sev"))]
 mod sev_tests {
-    use sev::{
-        attestation::reference::sev::*,
-        types::shared::reference::vcpu::CpuType,
-    };
+    use sev::{attestation::reference::sev::*, types::shared::reference::vcpu::CpuType};
     // test regular sev-es
     #[test]
     fn test_seves() {

@@ -6,12 +6,12 @@
 //! [`crate::attestation::reference::sev`] to build VMSA pages for launch digest
 //! calculation.
 
+use super::vcpu::CpuType;
 use crate::{
     error::MeasurementError,
     parser::{ByteParser, Decoder, Encoder},
     util::parser_helper::{ReadExt, WriteExt},
 };
-use super::vcpu::CpuType;
 use bitfield::bitfield;
 use std::{
     fmt,

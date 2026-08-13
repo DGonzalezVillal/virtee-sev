@@ -381,7 +381,6 @@ impl Display for WrappedVlekHashstick {
 mod tests {
 
     use super::*;
-    use uuid::Uuid;
 
     #[cfg(all(feature = "platform", feature = "snp"))]
     use crate::firmware::host::types::SnpSetConfig;

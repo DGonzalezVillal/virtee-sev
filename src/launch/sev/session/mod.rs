@@ -9,9 +9,7 @@ mod key;
 
 use crate::{error::SessionError, types::shared::FirmwareVersion};
 
-use super::{
-    Header, HeaderFlags, Measurement, Policy, Secret, Session as LaunchSession, Start,
-};
+use super::{Header, HeaderFlags, Measurement, Policy, Secret, Session as LaunchSession, Start};
 
 use std::io::{ErrorKind, Result};
 
@@ -291,8 +289,8 @@ impl Session<Verified> {
 
 #[cfg(test)]
 mod initialized {
-    use super::{Initialized, Measurement, Policy, Session};
     use super::key;
+    use super::{Initialized, Measurement, Policy, Session};
     use crate::launch::sev::PolicyFlags;
     use crate::types::shared::FirmwareVersion;
 

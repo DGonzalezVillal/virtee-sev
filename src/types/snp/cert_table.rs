@@ -23,10 +23,7 @@ use std::{
 };
 
 #[cfg(all(target_os = "linux", feature = "attester"))]
-use crate::{
-    error::CertError,
-    firmware::guest::cert_table::KernelCertTableEntry,
-};
+use crate::{error::CertError, firmware::guest::cert_table::KernelCertTableEntry};
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};

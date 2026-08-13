@@ -1,6 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
-#[cfg(all(feature = "sev", feature = "platform", feature = "endorser", feature = "verifier", target_os = "linux"))]
+#[cfg(all(
+    feature = "sev",
+    feature = "platform",
+    feature = "endorser",
+    feature = "verifier",
+    target_os = "linux"
+))]
 mod sev {
     #[cfg(feature = "dangerous_hw_tests")]
     use serial_test::serial;
