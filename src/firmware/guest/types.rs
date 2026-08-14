@@ -1,42 +1,50 @@
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{error::*, firmware::guest::*};
+//! Guest `/dev/sev-guest` ioctl request and response layouts.
+//!
+//! C-compatible structs passed to the Linux kernel for SNP guest operations.
+//! Higher-level Rust types in [`crate::types::snp`] convert into these layouts
+//! before ioctl submission.
+//!
+//! # Response sizing
+//!
+//! [`ReportRsp`] is padded to exactly 4000 bytes so the guest response buffer
+//! fits within a single 4 KiB page (96-byte message header + encrypted payload).
+//! The attestation report itself is 1184 bytes ([`ReportRsp::report`]).
+
+use crate::{error::*, types::snp::DerivedKey};
 
 use static_assertions::const_assert;
 
-/// This may end up being 4 when the Shadow Stack is enabled.
+/// Maximum valid VMPL value for report and derived-key requests.
+///
+/// May become `4` when the Shadow Stack feature is enabled.
 /// [APMv2 - Table 15-38 - VMPL Permission Mask Definition](https://www.amd.com/system/files/TechDocs/24593.pdf#page=670&zoom=100,0,400)
 const MAX_VMPL: u32 = 3;
 
+/// Request payload for `SNP_GET_DERIVED_KEY`.
 #[repr(C)]
 #[derive(Debug, Default)]
 pub struct DerivedKeyReq {
-    /// Selects the root key to derive the key from.
-    /// 0: Indicates VCEK.
-    /// 1: Indicates VMRK.
+    /// Root key selector: `0` = VCEK, `1` = VMRK.
     root_key_select: u32,
 
-    /// Reserved, must be zero
+    /// Reserved, must be zero.
     reserved_0: u32,
 
-    /// What data will be mixed into the derived key.
+    /// Guest field selector bitmask mixed into the derived key.
     pub guest_field_select: u64,
 
-    /// The VMPL to mix into the derived key. Must be greater than or equal
-    /// to the current VMPL.
+    /// VMPL to mix into the key. Must be >= current VMPL and <= [`MAX_VMPL`].
     pub vmpl: u32,
 
-    /// The guest SVN to mix into the key. Must not exceed the guest SVN
-    /// provided at launch in the ID block.
+    /// Guest SVN to mix into the key. Must not exceed the launch ID block SVN.
     pub guest_svn: u32,
 
-    /// The TCB version to mix into the derived key. Must not
-    /// exceed CommittedTcb.
+    /// TCB version to mix into the key. Must not exceed committed TCB.
     pub tcb_version: u64,
 
-    /// The mitigation vector value to mix into the derived key.
-    /// Specific bit settings corresponding to mitigations required for Guest operation.
-    /// Introduced in FW 1.58, so if unset, it will default to 0.
+    /// Mitigation vector mixed into the key (FW 1.58+; defaults to 0).
     pub launch_mit_vector: u64,
 }
 
@@ -68,41 +76,42 @@ impl From<&mut DerivedKey> for DerivedKeyReq {
     }
 }
 
+/// Response from `SNP_GET_DERIVED_KEY`.
 #[derive(Default, Debug)]
 #[repr(C)]
-/// A raw representation of the PSP Report Response after calling SNP_GET_DERIVED_KEY.
 pub struct DerivedKeyRsp {
-    /// The status of key derivation operation.
-    /// 0h: Success.
-    /// 16h: Invalid parameters
+    /// Operation status: `0` = success, `0x16` = invalid parameters.
     pub status: u32,
 
     reserved_0: [u8; 28],
 
-    /// The requested derived key if [DerivedKeyRsp::status](self::DerivedKeyRsp::status) is 0h.
+    /// 32-byte derived key when [`status`](Self::status) is `0`.
     pub key: [u8; 32],
 }
 
-/// Information provided by the guest owner for requesting an attestation
-/// report and associated certificate chain from the AMD Secure Processor.
+/// Request payload for `SNP_GET_EXT_REPORT`.
 ///
-/// The certificate buffer *should* be page aligned for the kernel.
+/// Extends [`ReportReq`] with a guest-virtual address and length for the
+/// firmware certificate table. The certificate buffer should be page-aligned
+/// for the kernel driver.
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
 pub struct ExtReportReq {
-    /// The [ReportReq](self::ReportReq).
+    /// Base report request parameters.
     pub data: ReportReq,
 
-    /// Starting address of the certificate data buffer.
+    /// Guest-virtual address of the certificate data buffer.
     pub certs_address: u64,
 
-    /// The page aligned length of the buffer the hypervisor should store the certificates in.
+    /// Page-aligned length of the certificate buffer.
     pub certs_len: u32,
 }
 
 impl ExtReportReq {
-    /// Creates a new exteded report with a one, 4K-page
-    /// for the certs_address field and the certs_len field.
+    /// Create an extended report request without a certificate buffer.
+    ///
+    /// Sets `certs_address` to `u64::MAX` and `certs_len` to `0`, indicating
+    /// no certificate table is requested.
     pub fn new(data: &ReportReq) -> Self {
         Self {
             data: *data,
@@ -112,19 +121,20 @@ impl ExtReportReq {
     }
 }
 
-/// Information provided by the guest owner for requesting an attestation
-/// report from the AMD Secure Processor.
+/// Request payload for `SNP_GET_REPORT`.
+///
+/// Carries guest-provided report data (64 bytes) and the VMPL level to embed
+/// in the generated attestation report.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 #[repr(C)]
 pub struct ReportReq {
-    /// Guest-provided data to be included int the attestation report
+    /// Guest-provided data included in the attestation report.
     report_data: [u8; 64],
 
-    /// The VMPL to put into the attestation report. Must be greater than or
-    /// equal to the current VMPL and at most three.
+    /// VMPL for the report. Must be >= current VMPL and at most [`MAX_VMPL`].
     vmpl: u32,
 
-    /// Reserved memory slot, must be zero.
+    /// Reserved, must be zero.
     _reserved: [u8; 28],
 }
 
@@ -139,12 +149,16 @@ impl Default for ReportReq {
 }
 
 impl ReportReq {
-    /// Instantiates a new [ReportReq](self::ReportReq) for fetching an [AttestationReport](crate::firmware::guest::types::snp::AttestationReport) from the PSP.
+    /// Build a report request for the ASP.
     ///
     /// # Arguments
     ///
-    /// * `report_data` - (Optional) 64 bytes of unique data to be included in the generated report.
-    /// * `vmpl` - The VMPL level the guest VM is running on.
+    /// * `report_data` — optional 64 bytes of guest nonce/data for the report
+    /// * `vmpl` — optional VMPL override (defaults to `1`)
+    ///
+    /// # Errors
+    ///
+    /// Returns [`UserApiError::VmplError`] when `vmpl` exceeds [`MAX_VMPL`].
     pub fn new(report_data: Option<[u8; 64]>, vmpl: Option<u32>) -> Result<Self, UserApiError> {
         let mut request = Self::default();
 
@@ -166,34 +180,30 @@ impl ReportReq {
 
 const REPORT_SIZE: usize = 1184usize;
 
-/// The response from the PSP containing the generated attestation report.
+/// Response from `SNP_GET_REPORT` / `SNP_GET_EXT_REPORT`.
 ///
-/// The Report is padded to exactly 4000 Bytes to make sure the page size
-/// matches.
+/// Padded to exactly 4000 bytes for 4 KiB page alignment:
 ///
-///
-/// ```txt
+/// ```text
 ///     96 Bytes (*Message Header)
 /// + 4000 Bytes (*Encrypted Message)
 /// ------------
 ///   4096 Bytes (4K Memory Page Alignment)
 /// ```
-/// <sup>*[Message Header - 8.26 SNP_GUEST_REQUEST - Table 97](<https://www.amd.com/system/files/TechDocs/56860.pdf#page=113>)</sup>
+/// <sup>*[Message Header - 8.26 SNP_GUEST_REQUEST - Table 97](<https://www.amd.com/content/dam/amd/en/documents/epyc-technical-docs/specifications/56860.pdf#page=113>)</sup>
 ///
 /// <sup>*[Encrypted Message - sev-guest.h](<https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/uapi/linux/sev-guest.h>)</sup>
 #[derive(Clone, Copy)]
 #[repr(C)]
 pub struct ReportRsp {
-    /// The status of key derivation operation.
-    ///     0h: Success.
-    ///     16h: Invalid parameters.
+    /// Operation status: `0` = success, `0x16` = invalid parameters.
     pub status: u32,
-    /// Size in bytes of the report.
+    /// Size in bytes of the valid portion of [`report`](Self::report).
     pub report_size: u32,
     reserved_0: [u8; 24],
-    /// The attestation report generated by the firmware.
+    /// Raw 1184-byte attestation report from the firmware.
     pub report: [u8; REPORT_SIZE],
-    /// Padding bits to meet the memory page alignment.
+    /// Padding to reach the 4000-byte encrypted-message size.
     reserved_1: [u8; 4000
         - (REPORT_SIZE + (std::mem::size_of::<u32>() * 2) + std::mem::size_of::<[u8; 24]>())],
 }
@@ -224,7 +234,8 @@ impl Default for ReportRsp {
 #[cfg(test)]
 mod test {
     mod snp_report_req {
-        use crate::firmware::linux::guest::types::ReportReq;
+        use super::super::ReportReq;
+
         #[test]
         pub fn test_new() {
             let report_data: [u8; 64] = [
@@ -264,6 +275,8 @@ mod test {
             assert_eq!(expected, actual);
         }
     }
+
+    use crate::types::snp::GuestFieldSelect;
 
     use super::*;
 

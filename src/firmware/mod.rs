@@ -6,8 +6,8 @@
 #[cfg(any(feature = "sev", feature = "snp"))]
 pub mod host;
 
-#[cfg(feature = "snp")]
-pub mod guest;
+#[cfg(all(feature = "attester", feature = "snp"))]
+pub(crate) mod guest;
 
 #[cfg(any(feature = "sev", feature = "snp"))]
 pub(crate) mod linux;

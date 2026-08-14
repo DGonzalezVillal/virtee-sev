@@ -113,6 +113,18 @@ pub mod types;
 #[cfg(any(feature = "sev", feature = "snp"))]
 pub use types::shared::Generation;
 
+#[cfg(all(
+    any(feature = "sev", feature = "snp"),
+    any(
+        feature = "evidence",
+        feature = "reference",
+        feature = "verifier",
+        feature = "endorser",
+        feature = "attester"
+    )
+))]
+pub mod attestation;
+
 /// SEV and SEV-SNP certificates interface.
 pub mod certs;
 
