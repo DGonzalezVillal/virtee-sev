@@ -51,11 +51,11 @@
 //! ## Cryptographic Verification
 //!
 //! To enable the cryptographic verification of certificate chains and
-//! attestation reports, either the `openssl` or `crypto_nossl` feature
-//! has to be enabled manually. With `openssl`, OpenSSL is used for the
-//! verification. With `crypto_nossl`, OpenSSL is _not_ used for the
+//! attestation reports, either the `crypto-openssl` or `crypto-rust` feature
+//! has to be enabled manually. With `crypto-openssl`, OpenSSL is used for the
+//! verification. With `crypto-rust`, OpenSSL is _not_ used for the
 //! verification and instead pure-Rust libraries (e.g., `p384`, `rsa`,
-//! etc.) are used. `openssl` and `crypto_nossl` are mutually exclusive,
+//! etc.) are used. `crypto-openssl` and `crypto-rust` are mutually exclusive,
 //! and enabling both at the same time leads to a compiler error.
 //!
 //! ## Remarks
@@ -85,22 +85,40 @@
 #![allow(clippy::identity_op)]
 #![allow(clippy::unreadable_literal)]
 
-#[cfg(all(feature = "openssl", feature = "crypto_nossl"))]
+#[cfg(all(feature = "crypto-openssl", feature = "crypto-rust"))]
 compile_error!(
-    "feature \"openssl\" and feature \"crypto_nossl\" cannot be enabled at the same time"
+    "features \"crypto-openssl\" and \"crypto-rust\" cannot be enabled at the same time"
+);
+
+#[cfg(all(
+    any(feature = "verifier", feature = "endorser", feature = "reference"),
+    not(any(feature = "crypto-openssl", feature = "crypto-rust"))
+))]
+compile_error!(
+    "features \"verifier\", \"endorser\", and \"reference\" require \"crypto-openssl\" or \"crypto-rust\""
+);
+
+#[cfg(all(
+    feature = "sev",
+    feature = "platform",
+    not(all(feature = "endorser", feature = "verifier"))
+))]
+compile_error!(
+    "feature \"platform\" requires \"endorser\" and \"verifier\" when \"sev\" is enabled (legacy SEV host APIs use attestation::endorser::sev certificate types)"
 );
 
 /// SEV and SEV-SNP certificates interface.
 pub mod certs;
 
 pub mod firmware;
+#[cfg(feature = "launch")]
 pub mod launch;
 #[cfg(all(
     any(feature = "sev", feature = "snp"),
-    any(feature = "openssl", feature = "crypto_nossl")
+    any(feature = "crypto-openssl", feature = "crypto-rust")
 ))]
 pub mod measurement;
-#[cfg(all(target_os = "linux", feature = "openssl", feature = "sev"))]
+#[cfg(all(target_os = "linux", feature = "crypto-openssl", feature = "sev"))]
 pub mod session;
 mod util;
 pub mod vmsa;
@@ -117,7 +135,7 @@ use crate::parser::Decoder;
 #[cfg(all(feature = "sev", feature = "dangerous_hw_tests"))]
 pub use util::cached_chain;
 
-#[cfg(all(feature = "openssl", feature = "sev"))]
+#[cfg(all(feature = "crypto-openssl", feature = "sev"))]
 use certs::sev::sev;
 
 #[cfg(feature = "sev")]
@@ -126,7 +144,7 @@ use certs::sev::ca::{Certificate, Chain as CertSevCaChain};
 #[cfg(all(
     not(feature = "sev"),
     feature = "snp",
-    any(feature = "openssl", feature = "crypto_nossl")
+    any(feature = "crypto-openssl", feature = "crypto-rust")
 ))]
 use certs::snp::ca::Chain as CertSnpCaChain;
 
@@ -136,7 +154,7 @@ use certs::sev::builtin as SevBuiltin;
 #[cfg(all(
     not(feature = "sev"),
     feature = "snp",
-    any(feature = "openssl", feature = "crypto_nossl")
+    any(feature = "crypto-openssl", feature = "crypto-rust")
 ))]
 use certs::snp::builtin as SnpBuiltin;
 
@@ -157,11 +175,11 @@ use std::io::{Read, Write};
 /// ## Example
 ///
 /// ```no_run
-/// # #[cfg(features = "openssl")]
+/// # #[cfg(features = "crypto-openssl")]
 /// # {
 ///
 /// // NOTE: The conversion traits require the `sev` crate to have the
-/// // `openssl` feature enabled.
+/// // `crypto-openssl` feature enabled.
 ///
 /// use std::convert::TryFrom;
 /// use sev::certs::sev::Usage;
@@ -335,7 +353,7 @@ impl From<Generation> for CertSevCaChain {
 #[cfg(all(
     not(feature = "sev"),
     feature = "snp",
-    any(feature = "openssl", feature = "crypto_nossl")
+    any(feature = "crypto-openssl", feature = "crypto-rust")
 ))]
 impl From<Generation> for CertSnpCaChain {
     fn from(gen: Generation) -> CertSnpCaChain {
@@ -360,7 +378,7 @@ impl From<Generation> for CertSnpCaChain {
     }
 }
 
-#[cfg(all(feature = "sev", feature = "openssl"))]
+#[cfg(all(feature = "sev", feature = "crypto-openssl"))]
 impl TryFrom<&sev::Chain> for Generation {
     type Error = ();
 
