@@ -125,9 +125,6 @@ pub use types::shared::Generation;
 ))]
 pub mod attestation;
 
-/// SEV and SEV-SNP certificates interface.
-pub mod certs;
-
 pub mod firmware;
 #[cfg(feature = "launch")]
 pub mod launch;
@@ -147,116 +144,6 @@ pub mod error;
 /// Module for Encoding and Decoding types.
 pub mod parser;
 
-#[cfg(feature = "sev")]
-use crate::parser::Decoder;
 
 #[cfg(all(feature = "sev", feature = "dangerous_hw_tests"))]
 pub use util::cached_chain;
-
-#[cfg(all(feature = "crypto-openssl", feature = "sev"))]
-use certs::sev::sev;
-
-#[cfg(feature = "sev")]
-use certs::sev::ca::{Certificate, Chain as CertSevCaChain};
-
-#[cfg(all(
-    not(feature = "sev"),
-    feature = "snp",
-    any(feature = "crypto-openssl", feature = "crypto-rust")
-))]
-use certs::snp::ca::Chain as CertSnpCaChain;
-
-#[cfg(feature = "sev")]
-use certs::sev::builtin as SevBuiltin;
-
-#[cfg(all(
-    not(feature = "sev"),
-    feature = "snp",
-    any(feature = "crypto-openssl", feature = "crypto-rust")
-))]
-use certs::snp::builtin as SnpBuiltin;
-
-#[cfg(any(feature = "sev", feature = "snp"))]
-use std::convert::TryFrom;
-
-#[cfg(feature = "sev")]
-impl From<Generation> for CertSevCaChain {
-    fn from(generation: Generation) -> CertSevCaChain {
-        let (ark, ask) = match generation {
-            #[cfg(feature = "sev")]
-            Generation::Naples => (SevBuiltin::naples::ARK, SevBuiltin::naples::ASK),
-            #[cfg(feature = "sev")]
-            Generation::Rome => (SevBuiltin::rome::ARK, SevBuiltin::rome::ASK),
-            #[cfg(any(feature = "sev", feature = "snp"))]
-            Generation::Milan => (SevBuiltin::milan::ARK, SevBuiltin::milan::ASK),
-            #[cfg(any(feature = "sev", feature = "snp"))]
-            Generation::Genoa => (SevBuiltin::genoa::ARK, SevBuiltin::genoa::ASK),
-            #[cfg(any(feature = "sev", feature = "snp"))]
-            Generation::Turin => (SevBuiltin::turin::ARK, SevBuiltin::turin::ASK),
-            #[cfg(any(feature = "sev", feature = "snp"))]
-            Generation::Venice => panic!("Venice SEV CA chain is not yet implemented"),
-        };
-
-        CertSevCaChain {
-            ask: Certificate::decode(&mut &*ask, ()).unwrap(),
-            ark: Certificate::decode(&mut &*ark, ()).unwrap(),
-        }
-    }
-}
-
-#[cfg(all(
-    not(feature = "sev"),
-    feature = "snp",
-    any(feature = "crypto-openssl", feature = "crypto-rust")
-))]
-impl From<Generation> for CertSnpCaChain {
-    fn from(gen: Generation) -> CertSnpCaChain {
-        let (ark, ask) = match gen {
-            Generation::Milan => (
-                SnpBuiltin::milan::ark().unwrap(),
-                SnpBuiltin::milan::ask().unwrap(),
-            ),
-            Generation::Genoa => (
-                SnpBuiltin::genoa::ark().unwrap(),
-                SnpBuiltin::genoa::ask().unwrap(),
-            ),
-            Generation::Turin => (
-                SnpBuiltin::turin::ark().unwrap(),
-                SnpBuiltin::turin::ask().unwrap(),
-            ),
-
-            Generation::Venice => panic!("Venice SNP CA chain is not yet implemented"),
-        };
-
-        CertSnpCaChain { ark, ask }
-    }
-}
-
-#[cfg(all(feature = "sev", feature = "crypto-openssl"))]
-impl TryFrom<&sev::Chain> for Generation {
-    type Error = ();
-
-    fn try_from(schain: &sev::Chain) -> Result<Self, Self::Error> {
-        use crate::certs::sev::Verifiable;
-
-        let naples: CertSevCaChain = Generation::Naples.into();
-        let rome: CertSevCaChain = Generation::Rome.into();
-        let milan: CertSevCaChain = Generation::Milan.into();
-        let genoa: CertSevCaChain = Generation::Genoa.into();
-        let turin: CertSevCaChain = Generation::Turin.into();
-
-        Ok(if (&naples.ask, &schain.cek).verify().is_ok() {
-            Generation::Naples
-        } else if (&rome.ask, &schain.cek).verify().is_ok() {
-            Generation::Rome
-        } else if (&milan.ask, &schain.cek).verify().is_ok() {
-            Generation::Milan
-        } else if (&genoa.ask, &schain.cek).verify().is_ok() {
-            Generation::Genoa
-        } else if (&turin.ask, &schain.cek).verify().is_ok() {
-            Generation::Turin
-        } else {
-            return Err(());
-        })
-    }
-}

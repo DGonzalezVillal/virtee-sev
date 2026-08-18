@@ -7,17 +7,6 @@ pub use crate::firmware::linux::host::types::PlatformStatusFlags;
 use crate::parser::{Decoder, Encoder};
 use crate::util::{TypeLoad, TypeSave};
 
-#[cfg(feature = "openssl")]
-use std::convert::TryInto;
-
-#[cfg(feature = "openssl")]
-use crate::certs::sev::{
-    sev::{Certificate, EcdsaSignature, Usage},
-    PublicKey, Verifiable,
-};
-#[cfg(feature = "openssl")]
-use openssl::{ec::EcKey, ecdsa::EcdsaSig, pkey::Public, sha::Sha256};
-
 use std::{
     fmt::Debug,
     io::{Read, Write},
@@ -157,31 +146,3 @@ impl LegacyAttestationReport {
     }
 }
 
-#[cfg(feature = "openssl")]
-impl Verifiable for (&Certificate, &LegacyAttestationReport) {
-    type Output = ();
-
-    fn verify(self) -> std::io::Result<Self::Output> {
-        use std::convert::TryFrom;
-
-        let sev_pub_key: PublicKey<Usage> = self.0.try_into()?;
-        let pub_key: &EcKey<Public> = &sev_pub_key.ec_key()?;
-
-        let sig = EcdsaSignature::try_from(self.1.signature.as_slice())?;
-
-        let sig: EcdsaSig = sig.try_into()?;
-
-        let mut hasher = Sha256::new();
-        hasher.update(&self.1.measurable_bytes());
-        let base_digest = hasher.finish();
-
-        let signed = sig.verify(&base_digest, pub_key)?;
-        match signed {
-            true => Ok(()),
-            false => Err(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                "PEK does not sign the attestation report",
-            )),
-        }
-    }
-}

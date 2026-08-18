@@ -11,3 +11,15 @@
     any(feature = "sev", feature = "snp")
 ))]
 pub mod attester;
+
+#[cfg(all(
+    feature = "endorser",
+    any(
+        all(
+            feature = "snp",
+            any(feature = "crypto-openssl", feature = "crypto-rust")
+        ),
+        all(feature = "sev", feature = "crypto-openssl")
+    )
+))]
+pub mod endorser;

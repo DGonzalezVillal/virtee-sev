@@ -377,7 +377,7 @@ pub struct Start {
     pub policy: Policy,
 
     /// The tenant's Diffie-Hellman certificate.
-    pub cert: certs::sev::sev::Certificate,
+    pub cert: crate::attestation::endorser::sev::cert::Certificate,
 
     /// A secure channel with the AMD SP.
     pub session: Session,

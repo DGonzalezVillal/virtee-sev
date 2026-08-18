@@ -21,7 +21,7 @@ use crate::error::*;
 
 #[cfg(feature = "sev")]
 #[cfg(target_os = "linux")]
-use crate::certs::sev::sev::{Certificate, Chain};
+use crate::attestation::endorser::sev::{cert::Certificate, Chain};
 
 #[cfg(target_os = "linux")]
 use std::{

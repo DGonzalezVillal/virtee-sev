@@ -94,12 +94,12 @@ impl Session<Initialized> {
     /// Produces data needed to initiate the SEV launch sequence.
     pub fn start(
         &self,
-        chain: certs::sev::Chain,
+        chain: crate::attestation::endorser::sev::Chain,
     ) -> std::result::Result<launch::sev::Start, SessionError> {
-        use certs::sev::*;
+        use crate::attestation::endorser::sev::{cert, *};
 
         let pdh = chain.verify()?;
-        let (crt, prv) = sev::Certificate::generate(sev::Usage::PDH)?;
+        let (crt, prv) = cert::Certificate::generate(Usage::PDH)?;
 
         let z = key::Key::new(prv.derive(pdh)?);
         let mut nonce = [0u8; 16];
@@ -121,9 +121,11 @@ impl Session<Initialized> {
     /// certificate chain.
     pub fn start_pdh(
         &self,
-        pdh: certs::sev::sev::Certificate,
+        pdh: crate::attestation::endorser::sev::cert::Certificate,
     ) -> std::result::Result<launch::sev::Start, SessionError> {
-        let (crt, prv) = sev::Certificate::generate(sev::Usage::PDH)?;
+        let (crt, prv) = crate::attestation::endorser::sev::cert::Certificate::generate(
+            crate::attestation::endorser::sev::Usage::PDH,
+        )?;
 
         let z = key::Key::new(prv.derive(&pdh)?);
         let mut nonce = [0u8; 16];

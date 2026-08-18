@@ -2,7 +2,7 @@
 
 //! Types for interacting with the KVM SEV guest management API.
 
-use crate::{certs::sev::sev::Certificate, launch::sev::*};
+use crate::{attestation::endorser::sev::cert::Certificate, launch::sev::*};
 
 use std::{
     marker::PhantomData,
