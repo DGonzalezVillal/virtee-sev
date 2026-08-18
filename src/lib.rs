@@ -125,7 +125,11 @@ pub use types::shared::Generation;
 ))]
 pub mod attestation;
 
-pub mod firmware;
+#[cfg(feature = "platform")]
+pub mod platform;
+
+#[cfg(any(feature = "sev", feature = "snp"))]
+pub(crate) mod firmware;
 #[cfg(feature = "launch")]
 pub mod launch;
 #[cfg(all(target_os = "linux", feature = "crypto-openssl", feature = "sev"))]

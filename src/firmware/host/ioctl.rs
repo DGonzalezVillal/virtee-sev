@@ -1,7 +1,42 @@
 // SPDX-License-Identifier: Apache-2.0
 
-//! A collection of type-safe ioctl implementations for the AMD Secure Encrypted Virtualization
-//! (SEV) platform. These ioctls are exported by the Linux kernel.
+//! Type-safe ioctl bindings for the Linux `/dev/sev` device.
+//!
+//! Defines the ioctl group (`'S'`), command identifiers, and the [`Command`]
+//! envelope used to pass sub-command pointers to the kernel. Payload layouts
+//! are in [`super::types`].
+//!
+//! Kernel UAPI reference: `include/uapi/linux/psp-sev.h`.
+//!
+//! # Ioctl summary
+//!
+//! ## Shared (legacy SEV and SEV-SNP)
+//!
+//! These ioctls and payloads are available whenever `platform` is enabled and
+//! either `sev` or `snp` is active. SNP-only builds still use them for CPU ID
+//! lookup and legacy platform status:
+//!
+//! | Constant | Payload | Purpose |
+//! |----------|---------|---------|
+//! | `PLATFORM_STATUS` | [`PlatformStatus`](super::types::PlatformStatus) | Legacy SEV platform status |
+//! | `GET_ID` | [`GetId`](super::types::GetId) | CPU unique identifier |
+//!
+//! ## Legacy SEV only (`sev` feature)
+//!
+//! | Constant | Purpose |
+//! |----------|---------|
+//! | `PLATFORM_RESET` | Reset platform persistent state |
+//! | `PEK_GEN` / `PEK_CSR` / `PEK_CERT_IMPORT` | Platform endorsement key provisioning |
+//! | `PDH_GEN` / `PDH_CERT_EXPORT` | Platform Diffie-Hellman key export |
+//!
+//! ## SEV-SNP only (`snp` feature)
+//!
+//! | Constant | Purpose |
+//! |----------|---------|
+//! | `SNP_PLATFORM_STATUS` | SNP platform status |
+//! | `SNP_COMMIT` | Commit firmware TCB/version |
+//! | `SNP_SET_CONFIG` | Set reported TCB and mask ID |
+//! | `SNP_VLEK_LOAD` | Load VLEK hashstick |
 
 use super::types::*;
 
@@ -53,6 +88,7 @@ impl_const_id! {
     pub Id => u32;
 
     GetId<'_> = 0x8, /* GET_ID2 is 0x8, the deprecated GET_ID ioctl is 0x7 */
+    PlatformStatus = 0x1,
     SnpPlatformStatus = 0x9,
     SnpCommit = 0xA,
     SnpSetConfig = 0xB,
@@ -61,12 +97,14 @@ impl_const_id! {
 
 const SEV: Group = Group::new(b'S');
 
-/// Resets the SEV platform's persistent state.
+/// Reset the SEV platform's persistent state.
 #[cfg(feature = "sev")]
 pub const PLATFORM_RESET: Ioctl<WriteRead, &Command<PlatformReset>> = unsafe { SEV.write_read(0) };
 
-/// Gathers a status report from the SEV firmware.
-#[cfg(feature = "sev")]
+/// Query legacy SEV platform status.
+///
+/// Shared ioctl: available on both legacy SEV and SEV-SNP hosts.
+#[cfg(any(feature = "sev", feature = "snp"))]
 pub const PLATFORM_STATUS: Ioctl<WriteRead, &Command<PlatformStatus>> =
     unsafe { SEV.write_read(0) };
 
@@ -74,68 +112,74 @@ pub const PLATFORM_STATUS: Ioctl<WriteRead, &Command<PlatformStatus>> =
 #[cfg(feature = "sev")]
 pub const PEK_GEN: Ioctl<WriteRead, &Command<PekGen>> = unsafe { SEV.write_read(0) };
 
-/// Take ownership of the platform.
+/// Request PEK certificate signing (CSR).
 #[cfg(feature = "sev")]
 pub const PEK_CSR: Ioctl<WriteRead, &Command<PekCsr<'_>>> = unsafe { SEV.write_read(0) };
 
-/// (Re)generate the Platform Diffie-Hellman (PDH).
+/// (Re)generate the Platform Diffie-Hellman (PDH) key.
 #[cfg(feature = "sev")]
 pub const PDH_GEN: Ioctl<WriteRead, &Command<PdhGen>> = unsafe { SEV.write_read(0) };
 
-/// Retrieve the PDH and the platform certificate chain.
+/// Export the PDH and platform certificate chain.
 #[cfg(feature = "sev")]
 pub const PDH_CERT_EXPORT: Ioctl<WriteRead, &Command<PdhCertExport<'_>>> =
     unsafe { SEV.write_read(0) };
 
-/// Join the platform to the domain.
+/// Import PEK and OCA certificates to join the platform to a domain.
 #[cfg(feature = "sev")]
 pub const PEK_CERT_IMPORT: Ioctl<WriteRead, &Command<PekCertImport<'_>>> =
     unsafe { SEV.write_read(0) };
 
-/// Get the CPU's unique ID that can be used for getting a certificate for the CEK public key.
+/// Read the CPU unique identifier (for CEK certificate lookup).
+///
+/// Shared ioctl: available on both legacy SEV and SEV-SNP hosts.
 #[cfg(any(feature = "sev", feature = "snp"))]
 pub const GET_ID: Ioctl<WriteRead, &Command<GetId<'_>>> = unsafe { SEV.write_read(0) };
 
-/// Return information about the current status and capabilities of the SEV-SNP platform.
+/// Query SNP platform status and capabilities.
 #[cfg(feature = "snp")]
 pub const SNP_PLATFORM_STATUS: Ioctl<WriteRead, &Command<SnpPlatformStatus>> =
     unsafe { SEV.write_read(0) };
 
-/// The firmware will perform the following actions:
-/// - Set the CommittedTCB to the CurrentTCB of the current firmware.
-/// - Set the CommittedVersion to the FirmwareVersion of the current firmware.
-/// - Sets the ReportedTCB to the CurrentTCB.
-/// - Deletes the VLEK hashstick if the ReportedTCB changed.
+/// Commit the current firmware TCB and version.
 ///
-/// C IOCTL calls -> sev_ioctl_do_snp_commit
+/// The firmware will:
+/// - Set `CommittedTCB` to the current firmware TCB.
+/// - Set `CommittedVersion` to the current firmware version.
+/// - Set `ReportedTCB` to the current TCB.
+/// - Delete the VLEK hashstick if `ReportedTCB` changed.
 #[cfg(feature = "snp")]
 pub const SNP_COMMIT: Ioctl<WriteRead, &Command<SnpCommit>> = unsafe { SEV.write_read(0) };
 
-/// Set the system-wide configuration such as reported TCB version in the attestation report
-/// C IOCTL calls -> sev_ioctl_do_snp_set_config
+/// Set system-wide SNP configuration (reported TCB, mask ID).
 #[cfg(feature = "snp")]
 pub const SNP_SET_CONFIG: Ioctl<WriteRead, &Command<SnpSetConfig>> = unsafe { SEV.write_read(0) };
 
+/// Load a VLEK hashstick for VLEK-based attestation.
 #[cfg(feature = "snp")]
-/// Load a specified VLEK hashstick into the AMD Secure Processor to be used in place of VCEK.
 pub const SNP_VLEK_LOAD: Ioctl<WriteRead, &Command<SnpVlekLoad>> = unsafe { SEV.write_read(0) };
 
-/// The Rust-flavored, FFI-friendly version of `struct sev_issue_cmd` which is
-/// used to pass arguments to the SEV ioctl implementation.
+/// Envelope passed to every `/dev/sev` ioctl.
 ///
-/// This struct is defined in the Linux kernel: include/uapi/linux/psp-sev.h
+/// Rust/FFI-friendly mirror of the kernel's `struct sev_issue_cmd` from
+/// `include/uapi/linux/psp-sev.h`. Carries the sub-command ID, a pointer to
+/// the payload, and a firmware error code populated on failure.
 #[repr(C, packed)]
 pub struct Command<'a, T: Id> {
+    /// Sub-command identifier (see [`Id`]).
     pub code: u32,
+    /// Host-virtual address of the sub-command payload.
     pub data: u64,
+    /// Firmware error code written by the kernel on failure.
     pub error: u32,
     _phantom: PhantomData<&'a T>,
 }
 
 impl<'a, T: Id> Command<'a, T> {
-    /// Create an SEV command with the expectation that the host platform/kernel will write to
-    /// the caller's address space either to the data held in the `Command.subcmd` field or some
-    /// other region specified by the `Command.subcmd` field.
+    /// Build a command whose payload may be mutated by the kernel.
+    ///
+    /// Use when the ioctl writes results back into `subcmd` or a buffer
+    /// referenced by `subcmd`.
     pub fn from_mut(subcmd: &'a mut T) -> Self {
         Command {
             code: T::ID,
@@ -145,10 +189,10 @@ impl<'a, T: Id> Command<'a, T> {
         }
     }
 
-    /// Create an SEV command with the expectation that the host platform/kernel *WILL NOT* mutate
-    /// the caller's address space in its response. Note: this does not actually prevent the host
-    /// platform/kernel from writing to the caller's address space if it wants to. This is primarily
-    /// a semantic tool for programming against the SEV ioctl API.
+    /// Build a command with a read-only payload reference.
+    ///
+    /// Semantic hint that the kernel should not mutate caller memory. Note that
+    /// this does not prevent the kernel from writing if the UAPI allows it.
     #[cfg(feature = "sev")]
     pub fn from(subcmd: &'a T) -> Self {
         Command {
@@ -159,7 +203,7 @@ impl<'a, T: Id> Command<'a, T> {
         }
     }
 
-    /// encapsulate a SEV errors in command as a Firmware error.
+    /// Convert the firmware error word into a [`FirmwareError`].
     pub fn encapsulate(&self) -> FirmwareError {
         FirmwareError::from(self.error)
     }
@@ -180,8 +224,8 @@ mod tests {
         assert_eq!(error, 0);
     }
 
-    #[cfg(feature = "sev")]
-    mod sev_specific_tests {
+    #[cfg(any(feature = "sev", feature = "snp"))]
+    mod platform_status_tests {
         use super::super::*;
 
         #[test]
@@ -193,6 +237,8 @@ mod tests {
             assert_eq!(code, PlatformStatus::ID);
             assert_eq!(error, 0);
         }
+
+        #[cfg(feature = "sev")]
         #[test]
         fn test_command_platform_status_non_mut() {
             let data = PlatformStatus::default();

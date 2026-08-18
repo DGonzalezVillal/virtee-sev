@@ -1,93 +1,115 @@
 // SPDX-License-Identifier: Apache-2.0
 
-//! Operations for managing the SEV platform.
+//! Legacy SEV host ioctl payload layouts.
+//!
+//! Structures for first-generation SEV platform key provisioning ioctls:
+//! Platform Endorsement Key (PEK) and Platform Diffie-Hellman (PDH) operations.
+//!
+//! Requires the `sev`, `platform`, `endorser`, and `verifier` features. Public wrappers are in
+//! [`crate::platform::sev`].
+//!
+//! Shared legacy/SNP payloads ([`PlatformStatus`], [`GetId`]) live in
+//! [`super::shared`].
 
-use crate::firmware::host::State;
-pub use crate::firmware::linux::host::types::PlatformStatusFlags;
-use crate::parser::{Decoder, Encoder};
-use crate::util::{TypeLoad, TypeSave};
+#[cfg(target_os = "linux")]
+use crate::attestation::endorser::sev::cert;
 
-use std::{
-    fmt::Debug,
-    io::{Read, Write},
-};
+#[cfg(target_os = "linux")]
+use std::marker::PhantomData;
 
-#[cfg(feature = "serde")]
-use serde::{Deserialize, Serialize};
+/// Platform reset payload (no fields).
+///
+/// Used by the legacy-only `PLATFORM_RESET` ioctl. See AMD SEV API specification
+/// chapter 5.5.
+#[cfg(target_os = "linux")]
+pub struct PlatformReset;
 
-/// Information about the SEV platform version.
-#[repr(C)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Version {
-    /// The major version number.
-    pub major: u8,
+/// Generate a new Platform Endorsement Key (PEK).
+///
+/// See AMD SEV API specification chapter 5.7.
+#[cfg(target_os = "linux")]
+pub struct PekGen;
 
-    /// The minor version number.
-    pub minor: u8,
+/// Request PEK certificate signing (CSR) payload.
+///
+/// Points at a legacy SEV [`Certificate`](crate::attestation::endorser::sev::cert::Certificate)
+/// buffer the kernel fills. See chapter 5.8, table 27.
+#[repr(C, packed)]
+#[cfg(target_os = "linux")]
+pub struct PekCsr<'a> {
+    addr: u64,
+    len: u32,
+    _phantom: PhantomData<&'a ()>,
 }
 
-impl std::fmt::Display for Version {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{}.{}", self.major, self.minor)
-    }
-}
-
-impl From<u16> for Version {
-    fn from(v: u16) -> Self {
+#[cfg(target_os = "linux")]
+impl<'a> PekCsr<'a> {
+    /// Build a CSR payload referencing a certificate buffer.
+    pub fn new(cert: &'a mut cert::Certificate) -> Self {
         Self {
-            major: ((v & 0xF0) >> 4) as u8,
-            minor: (v & 0x0F) as u8,
+            addr: cert as *mut _ as _,
+            len: std::mem::size_of_val(cert) as _,
+            _phantom: PhantomData,
         }
     }
 }
 
-/// A description of the SEV platform's build information.
-#[repr(C)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, PartialOrd)]
-pub struct Build {
-    /// The version information.
-    pub version: Version,
-
-    /// The build number.
-    pub build: u8,
+/// Import PEK and OCA certificates to join the platform to a domain.
+///
+/// See AMD SEV API specification chapter 5.9, table 29.
+#[cfg(target_os = "linux")]
+#[repr(C, packed)]
+pub struct PekCertImport<'a> {
+    pek_addr: u64,
+    pek_len: u32,
+    oca_addr: u64,
+    oca_len: u32,
+    _phantom: PhantomData<&'a ()>,
 }
 
-impl std::fmt::Display for Build {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{}.{}", self.version, self.build)
+#[cfg(target_os = "linux")]
+impl<'a> PekCertImport<'a> {
+    /// Build an import payload from PEK and OCA certificate buffers.
+    pub fn new(pek: &'a cert::Certificate, oca: &'a cert::Certificate) -> Self {
+        Self {
+            pek_addr: pek as *const _ as _,
+            pek_len: std::mem::size_of_val(pek) as _,
+            oca_addr: oca as *const _ as _,
+            oca_len: std::mem::size_of_val(oca) as _,
+            _phantom: PhantomData,
+        }
     }
 }
 
-impl Decoder<()> for Build {
-    fn decode(reader: &mut impl Read, _: ()) -> std::io::Result<Self> {
-        reader.load()
+/// (Re)generate the Platform Diffie-Hellman (PDH) key.
+///
+/// See AMD SEV API specification chapter 5.10.
+#[cfg(target_os = "linux")]
+pub struct PdhGen;
+
+/// Export PDH and platform certificate chain payload.
+///
+/// See AMD SEV API specification chapter 5.11.
+#[cfg(target_os = "linux")]
+#[repr(C, packed)]
+pub struct PdhCertExport<'a> {
+    pdh_addr: u64,
+    pdh_len: u32,
+    certs_addr: u64,
+    certs_len: u32,
+    _phantom: PhantomData<&'a ()>,
+}
+
+#[cfg(target_os = "linux")]
+impl<'a> PdhCertExport<'a> {
+    /// Build an export payload referencing PDH and a three-certificate chain buffer.
+    pub fn new(pdh: &'a mut cert::Certificate, certs: &'a mut [cert::Certificate; 3]) -> Self {
+        Self {
+            pdh_addr: pdh as *mut _ as _,
+            pdh_len: std::mem::size_of_val(pdh) as _,
+            certs_addr: certs.as_mut_ptr() as _,
+            certs_len: std::mem::size_of_val(certs) as _,
+            _phantom: PhantomData,
+        }
     }
 }
-
-impl Encoder<()> for Build {
-    fn encode(&self, writer: &mut impl Write, _: ()) -> std::io::Result<()> {
-        writer.save(self)
-    }
-}
-
-/// Information regarding the SEV platform's current status.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Status {
-    /// The build number.
-    pub build: Build,
-
-    /// The platform's current state.
-    pub state: State,
-
-    /// Additional platform information is encoded into flags.
-    ///
-    /// These could describe whether encrypted state functionality
-    /// is enabled, or whether the platform is self-owned.
-    pub flags: PlatformStatusFlags,
-
-    /// The number of valid guests supervised by this platform.
-    pub guests: u32,
-}
-
