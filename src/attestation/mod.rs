@@ -29,6 +29,30 @@ pub mod endorser;
 #[cfg(all(feature = "reference", any(feature = "sev", feature = "snp")))]
 pub mod reference;
 
+#[cfg(all(
+    feature = "verifier",
+    any(
+        all(
+            feature = "snp",
+            any(feature = "crypto-openssl", feature = "crypto-rust")
+        ),
+        all(feature = "sev", feature = "crypto-openssl")
+    )
+))]
+pub mod verifier;
+
+#[cfg(all(
+    feature = "verifier",
+    any(
+        all(
+            feature = "snp",
+            any(feature = "crypto-openssl", feature = "crypto-rust")
+        ),
+        all(feature = "sev", feature = "crypto-openssl")
+    )
+))]
+pub use verifier::Verifiable;
+
 #[cfg(all(feature = "evidence", feature = "snp"))]
 pub use evidence::snp::{
     KeyInfo, PlatformInfo, Report, ReportBody, ReportVariant, Signature, SignatureAlgorithm,

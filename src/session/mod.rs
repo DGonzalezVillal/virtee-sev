@@ -97,6 +97,7 @@ impl Session<Initialized> {
         chain: crate::attestation::endorser::sev::Chain,
     ) -> std::result::Result<launch::sev::Start, SessionError> {
         use crate::attestation::endorser::sev::{cert, *};
+        use crate::attestation::verifier::Verifiable;
 
         let pdh = chain.verify()?;
         let (crt, prv) = cert::Certificate::generate(Usage::PDH)?;
