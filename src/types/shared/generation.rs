@@ -10,12 +10,9 @@ use std::convert::TryFrom;
 
 /// A representation for EPYC generational product lines.
 ///
-/// Implements type conversion traits to determine which generation
-/// a given SEV certificate chain corresponds to. This is helpful for
-/// automatically detecting what platform code is running on, as one
-/// can simply export the SEV certificate chain and attempt to produce
-/// a `Generation` from it with the [TryFrom](
-/// https://doc.rust-lang.org/std/convert/trait.TryFrom.html) trait.
+/// Implements type conversion traits to produce a generation from a
+/// CPUID-derived family/model pair (`snp`) or from a generation name
+/// (`sev` and/or `snp`).
 ///
 /// Host-side CPUID detection is available via [`Generation::identify_host_generation`]
 /// on Linux x86_64 when the `snp` feature is enabled. Other targets must supply
@@ -30,18 +27,6 @@ use std::convert::TryFrom;
 /// // Parse a generation name (available with `snp` and/or `sev` features).
 /// let generation = Generation::try_from("milan".to_string()).unwrap();
 /// assert_eq!(generation, Generation::Milan);
-///
-/// // Legacy SEV: infer generation from an exported platform certificate chain
-/// // (`sev`, `crypto-openssl`, and `platform` features required).
-/// # #[cfg(all(feature = "crypto-openssl", feature = "sev", feature = "platform"))]
-/// # {
-/// # use std::convert::TryFrom;
-/// # use sev::platform::Firmware;
-/// # let mut firmware = Firmware::open().unwrap();
-/// # let chain = firmware.pdh_cert_export().unwrap();
-/// # let generation = Generation::try_from(&chain).unwrap();
-/// # let _ = generation.titlecase();
-/// # }
 /// ```
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum Generation {

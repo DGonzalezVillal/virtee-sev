@@ -11,17 +11,19 @@
 //! An entire certificate chain can be created using the `sevctl`
 //! utility.
 
-#![cfg(all(feature = "sev", feature = "dangerous_hw_tests"))]
+// `fetch` infers the chain's generation, which requires the verifier.
+#![cfg(all(
+    feature = "sev",
+    feature = "dangerous_hw_tests",
+    feature = "platform",
+    feature = "verifier"
+))]
 
 #[cfg(feature = "crypto-openssl")]
 use crate::{
-    attestation::endorser::sev::{
-        ca::Chain as CaChain,
-        cert::Certificate,
-        Chain as FullChain,
-    },
-    firmware::host::Firmware,
-    types::shared::Generation,
+    attestation::endorser::sev::{ca::Chain as CaChain, cert::Certificate, Chain as FullChain},
+    attestation::verifier::sev::chain::infer_generation,
+    platform::Firmware,
 };
 
 #[cfg(feature = "crypto-openssl")]
@@ -94,8 +96,6 @@ pub fn rm_cached_chain() {
 /// Request CEK certificate from AMD KDS and generate a full chain.
 #[cfg(all(feature = "sev", feature = "crypto-openssl"))]
 pub fn get_chain() -> FullChain {
-    use std::convert::TryFrom;
-
     let mut firmware = Firmware::open().unwrap();
 
     const CEK_SVC: &str = "https://kdsintf.amd.com/cek/id";
@@ -122,7 +122,7 @@ pub fn get_chain() -> FullChain {
 
     sev_chain.cek = Certificate::decode(&mut cursor, ()).expect("Failed to decode CEK cert");
 
-    let ca_chain: CaChain = Generation::try_from(&sev_chain)
+    let ca_chain: CaChain = infer_generation(&sev_chain)
         .expect("Failed to generate SEV CA chain")
         .into();
 
