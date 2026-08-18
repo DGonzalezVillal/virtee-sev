@@ -26,6 +26,9 @@ pub mod evidence;
 ))]
 pub mod endorser;
 
+#[cfg(all(feature = "reference", any(feature = "sev", feature = "snp")))]
+pub mod reference;
+
 #[cfg(all(feature = "evidence", feature = "snp"))]
 pub use evidence::snp::{
     KeyInfo, PlatformInfo, Report, ReportBody, ReportVariant, Signature, SignatureAlgorithm,

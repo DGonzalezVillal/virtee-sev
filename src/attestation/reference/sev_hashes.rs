@@ -1,17 +1,42 @@
 // SPDX-License-Identifier: Apache-2.0
 
-//! Operations to handle OVMF SEV-HASHES
-#[cfg(feature = "openssl")]
-use openssl::sha::sha256;
+//! OVMF SEV-HASHES table construction for launch measurement.
+//!
+//! Builds the **SEV-HASHES** blob that OVMF/QEMU embeds in guest firmware memory.
+//! During SNP or SEV launch digest calculation, this table is measured as a
+//! normal 4 KiB page so changes to the kernel, initrd, or kernel command line
+//! change the guest **expected measurement**.
+//!
+//! # Role in measurement
+//!
+//! ```text
+//!  kernel file ──► SHA-256 ──┐
+//!  initrd file ──► SHA-256 ──┼──► SevHashTable ──► 4 KiB page ──► GCTX update
+//!  cmdline     ──► SHA-256 ──┘         ▲
+//!                                       │
+//!                              SevHashes::construct_page()
+//! ```
+//!
+//! [`SevHashes::construct_page`] layout must match QEMU's generator byte-for-byte
+//! or the computed launch digest will not match firmware.
+//!
+//! Used by:
+//!
+//! * [`crate::attestation::reference::snp::measurement::snp_calc_launch_digest`]
+//! * [`crate::attestation::reference::sev::sev_calc_launch_digest`] and related SEV measurement APIs
+//!
+//! # Public API
+//!
+//! | Method | Purpose |
+//! |--------|---------|
+//! | [`SevHashes::new`] | Hash kernel, optional initrd, optional cmdline |
+//! | [`SevHashes::construct_table`] | Serialized 168-byte (+ padding) hash table |
+//! | [`SevHashes::construct_page`] | Full 4 KiB guest page at a GPA offset |
+//!
+//! Wire layout types (`SevHashTable`, entries, GUIDs) are private; only
+//! [`SevHashes`] is public.
 
-#[cfg(feature = "crypto_nossl")]
-fn sha256(data: &[u8]) -> [u8; 32] {
-    use sha2::Digest;
-    let hash = sha2::Sha256::digest(data);
-    let mut out = [0u8; 32];
-    out.copy_from_slice(&hash);
-    out
-}
+use crate::attestation::reference::digest::sha256;
 use std::fs::File;
 use std::io::Write;
 use std::{
@@ -33,7 +58,7 @@ use serde::{Deserialize, Serialize};
 
 type Sha256Hash = [u8; 32];
 
-/// GUID stored as little endian
+/// GUID stored as little endian (OVMF wire format).
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, Clone, Copy, Default)]
 struct GuidLe {
@@ -84,16 +109,13 @@ impl FromStr for GuidLe {
     }
 }
 
-/// SEV hash table entry
+/// One entry in the OVMF SEV-HASHES table (cmdline, initrd, or kernel).
 #[repr(C)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, Clone, Copy, Default)]
 struct SevHashTableEntry {
-    /// GUID of the SEV hash
     guid: GuidLe,
-    /// Length of the hash
     length: u16,
-    /// SEV HASH
     hash: Sha256Hash,
 }
 
@@ -130,20 +152,15 @@ impl SevHashTableEntry {
     }
 }
 
-/// Table of SEV hashes
+/// OVMF SEV-HASHES table header plus cmdline, initrd, and kernel entries.
 #[repr(C)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, Clone, Copy, Default)]
 struct SevHashTable {
-    /// GUID of the SEV hash table entry
     guid: GuidLe,
-    /// Length of the SEV Has table entry
     length: u16,
-    /// Cmd line append table entry
     cmdline: SevHashTableEntry,
-    /// initrd table entry
     initrd: SevHashTableEntry,
-    /// Kernel table entry
     kernel: SevHashTableEntry,
 }
 
@@ -197,7 +214,7 @@ impl SevHashTable {
     }
 }
 
-/// Padded SEV hash table
+/// SEV-HASHES table with 16-byte alignment padding (QEMU layout).
 #[repr(C)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, Clone, Copy, Default)]
@@ -244,18 +261,46 @@ const SEV_KERNEL_ENTRY_GUID: Uuid = uuid!("4de79437-abd2-427f-b835-d5b172d2045b"
 const SEV_INITRD_ENTRY_GUID: Uuid = uuid!("44baf731-3a2f-4bd7-9af1-41e29169781d");
 const SEV_CMDLINE_ENTRY_GUID: Uuid = uuid!("97d02dd8-bd20-4c94-aa78-e7714d36ab2a");
 
-/// Struct containing the 3 possible SEV hashes
+/// SHA-256 hashes of the guest kernel, initrd, and kernel command line.
+///
+/// Input to OVMF **SEV-HASHES** page construction during launch digest
+/// calculation. Hashing rules match QEMU:
+///
+/// * **Kernel** — SHA-256 of the entire kernel file.
+/// * **Initrd** — SHA-256 of the initrd file, or SHA-256 of empty bytes when absent.
+/// * **Cmdline** — SHA-256 of trimmed append string + NUL, or SHA-256 of a single NUL when absent.
 pub struct SevHashes {
-    /// Kernel hash
     kernel_hash: Sha256Hash,
-    /// Initrd hash
     initrd_hash: Sha256Hash,
-    /// Cmdline append hash
     cmdline_hash: Sha256Hash,
 }
 
 impl SevHashes {
-    /// Generate hashes from the user provided kernel, initrd, and cmdline.
+    /// Build hashes from guest boot artifacts on disk.
+    ///
+    /// # Arguments
+    ///
+    /// * `kernel` — path to the guest kernel image (required).
+    /// * `initrd` — optional path to the initrd/initramfs image.
+    /// * `append` — optional kernel command-line append string (whitespace trimmed;
+    ///   a trailing NUL is included in the hash).
+    ///
+    /// # Errors
+    ///
+    /// [`MeasurementError`](crate::error::MeasurementError) on file I/O failure.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// use sev::attestation::reference::sev_hashes::SevHashes;
+    /// use std::path::PathBuf;
+    ///
+    /// let hashes = SevHashes::new(
+    ///     PathBuf::from("vmlinuz"),
+    ///     Some(PathBuf::from("initrd.img")),
+    ///     Some("console=ttyS0"),
+    /// )?;
+    /// ```
     pub fn new(
         kernel: PathBuf,
         initrd: Option<PathBuf>,
@@ -295,8 +340,19 @@ impl SevHashes {
         })
     }
 
-    /// Generate the SEV hashes area - this must be *identical* to the way QEMU
-    /// generates this info in order for the measurement to match.
+    /// Serialize the OVMF SEV-HASHES table (168 bytes + alignment padding).
+    ///
+    /// Output must be **identical** to QEMU's table for the same inputs or the
+    /// launch digest will not match firmware.
+    ///
+    /// # Returns
+    ///
+    /// Padded table bytes (`168 + padding`); use [`Self::construct_page`] for the
+    /// full 4 KiB guest page.
+    ///
+    /// # Errors
+    ///
+    /// Propagates wire-encoding errors as [`MeasurementError`](crate::error::MeasurementError).
     pub fn construct_table(
         &self,
     ) -> Result<[u8; 168 + PaddedSevHashTable::PADDING_SIZE], MeasurementError> {
@@ -314,7 +370,25 @@ impl SevHashes {
         Ok(bytes)
     }
 
-    /// Construct an SEV Hash page using hash table.
+    /// Build the 4 KiB guest page containing the SEV-HASHES table.
+    ///
+    /// Places the padded hash table at `offset` within a zero-filled 4096-byte
+    /// page. The offset comes from the OVMF metadata GPA
+    /// ([`OVMF::sev_hashes_table_gpa`](crate::types::shared::reference::ovmf::OVMF::sev_hashes_table_gpa))
+    /// and is used when measuring the `SNP_KERNEL_HASHES` section.
+    ///
+    /// # Arguments
+    ///
+    /// * `offset` — byte offset within the page (must be `< 4096`).
+    ///
+    /// # Returns
+    ///
+    /// Exactly 4096 bytes suitable for a [`PageType::Normal`] GCTX update.
+    ///
+    /// # Errors
+    ///
+    /// * [`SevHashError::InvalidOffset`](crate::error::SevHashError::InvalidOffset) — `offset >= 4096`
+    /// * [`SevHashError::InvalidSize`](crate::error::SevHashError::InvalidSize) — internal layout error
     pub fn construct_page(&self, offset: usize) -> Result<Vec<u8>, MeasurementError> {
         if offset >= 4096 {
             return Err(SevHashError::InvalidOffset(offset, 4096))?;

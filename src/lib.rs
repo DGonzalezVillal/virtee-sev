@@ -128,15 +128,9 @@ pub mod attestation;
 pub mod firmware;
 #[cfg(feature = "launch")]
 pub mod launch;
-#[cfg(all(
-    any(feature = "sev", feature = "snp"),
-    any(feature = "crypto-openssl", feature = "crypto-rust")
-))]
-pub mod measurement;
 #[cfg(all(target_os = "linux", feature = "crypto-openssl", feature = "sev"))]
 pub mod session;
 mod util;
-pub mod vmsa;
 
 /// Error module.
 pub mod error;

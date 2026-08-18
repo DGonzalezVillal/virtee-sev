@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! Operations to calculate guest measurement for different SEV modes
-use crate::measurement::{
+use crate::attestation::reference::sev_hashes::SevHashes;
+use crate::types::shared::reference::{
     ovmf::OVMF,
-    sev_hashes::SevHashes,
-    vcpu_types::CpuType,
+    vcpu::CpuType,
     vmsa::{GuestFeatures, VMMType, VMSA},
 };
 
