@@ -1,13 +1,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
-//! Utilities for creating a secure channel and facilitating the
-//! attestation process between the tenant and the AMD SP.
+//! Guest-owner session for the legacy SEV launch handshake.
+//!
+//! Builds [`Start`](super::Start) and [`Secret`](super::Secret) packets and
+//! verifies launch measurements against the AMD Secure Processor.
 
 mod key;
 
-use crate::{error::SessionError, firmware::host::Build, parser::Encoder};
+use crate::{error::SessionError, types::shared::FirmwareVersion};
 
-use super::*;
+use super::{Header, HeaderFlags, Measurement, Policy, Secret, Session as LaunchSession, Start};
 
 use std::io::{ErrorKind, Result};
 
@@ -23,13 +25,13 @@ pub struct Initialized;
 pub struct Measuring(hash::Hasher);
 
 /// Denotes an agreeable measurement with the AMD SP.
-pub struct Verified(launch::sev::Measurement);
+pub struct Verified(Measurement);
 
 /// Describes a secure channel with the AMD SP.
 ///
 /// This is required for facilitating an SEV launch and attestation.
 pub struct Session<T> {
-    policy: launch::sev::Policy,
+    policy: Policy,
 
     /// Transport Encryption Key.
     pub tek: key::Key,
@@ -40,16 +42,16 @@ pub struct Session<T> {
     data: T,
 }
 
-impl launch::sev::Policy {
+impl Policy {
     fn bytes(self) -> [u8; 4] {
         unsafe { std::mem::transmute(self) }
     }
 }
 
-impl std::convert::TryFrom<launch::sev::Policy> for Session<Initialized> {
+impl std::convert::TryFrom<Policy> for Session<Initialized> {
     type Error = ErrorCode;
 
-    fn try_from(value: launch::sev::Policy) -> std::result::Result<Self, Self::Error> {
+    fn try_from(value: Policy) -> std::result::Result<Self, Self::Error> {
         Ok(Self {
             tek: key::Key::random(16)?,
             tik: key::Key::random(16)?,
@@ -60,7 +62,7 @@ impl std::convert::TryFrom<launch::sev::Policy> for Session<Initialized> {
 }
 
 impl Session<Initialized> {
-    fn session(&self, nonce: [u8; 16], iv: [u8; 16], z: key::Key) -> Result<launch::sev::Session> {
+    fn session(&self, nonce: [u8; 16], iv: [u8; 16], z: key::Key) -> Result<LaunchSession> {
         let master = z.derive(16, &nonce, "sev-master-secret")?;
         let kek = master.derive(16, &[], "sev-kek")?;
         let kik = master.derive(16, &[], "sev-kik")?;
@@ -82,7 +84,7 @@ impl Session<Initialized> {
         let wmac = kik.mac(&wrap)?;
         let pmac = self.tik.mac(&self.policy.bytes())?;
 
-        Ok(launch::sev::Session {
+        Ok(LaunchSession {
             policy_mac: pmac,
             wrap_mac: wmac,
             wrap_tk: wrap,
@@ -95,12 +97,12 @@ impl Session<Initialized> {
     pub fn start(
         &self,
         chain: crate::attestation::endorser::sev::Chain,
-    ) -> std::result::Result<launch::sev::Start, SessionError> {
-        use crate::attestation::endorser::sev::{cert, *};
+    ) -> std::result::Result<Start, SessionError> {
+        use crate::attestation::endorser::sev::cert as platform;
         use crate::attestation::verifier::Verifiable;
 
         let pdh = chain.verify()?;
-        let (crt, prv) = cert::Certificate::generate(Usage::PDH)?;
+        let (crt, prv) = platform::Certificate::generate(platform::Usage::PDH)?;
 
         let z = key::Key::new(prv.derive(pdh)?);
         let mut nonce = [0u8; 16];
@@ -111,7 +113,7 @@ impl Session<Initialized> {
         rng.try_fill_bytes(&mut nonce)?;
         rng.try_fill_bytes(&mut iv)?;
 
-        Ok(launch::sev::Start {
+        Ok(Start {
             policy: self.policy,
             cert: crt,
             session: self.session(nonce, iv, z)?,
@@ -123,10 +125,10 @@ impl Session<Initialized> {
     pub fn start_pdh(
         &self,
         pdh: crate::attestation::endorser::sev::cert::Certificate,
-    ) -> std::result::Result<launch::sev::Start, SessionError> {
-        let (crt, prv) = crate::attestation::endorser::sev::cert::Certificate::generate(
-            crate::attestation::endorser::sev::Usage::PDH,
-        )?;
+    ) -> std::result::Result<Start, SessionError> {
+        use crate::attestation::endorser::sev::cert as platform;
+
+        let (crt, prv) = platform::Certificate::generate(platform::Usage::PDH)?;
 
         let z = key::Key::new(prv.derive(&pdh)?);
         let mut nonce = [0u8; 16];
@@ -137,7 +139,7 @@ impl Session<Initialized> {
         rng.try_fill_bytes(&mut nonce)?;
         rng.try_fill_bytes(&mut iv)?;
 
-        Ok(launch::sev::Start {
+        Ok(Start {
             policy: self.policy,
             cert: crt,
             session: self.session(nonce, iv, z)?,
@@ -161,14 +163,18 @@ impl Session<Initialized> {
     pub fn verify(
         self,
         digest: &[u8],
-        build: Build,
-        msr: launch::sev::Measurement,
+        firmware_version: FirmwareVersion,
+        msr: Measurement,
     ) -> Result<Session<Verified>> {
         let key = pkey::PKey::hmac(&self.tik)?;
         let mut sig = sign::Signer::new(hash::MessageDigest::sha256(), &key)?;
 
         sig.update(&[0x04u8])?;
-        sig.update(&[build.version.major, build.version.minor, build.build])?;
+        sig.update(&[
+            firmware_version.major,
+            firmware_version.minor,
+            firmware_version.build,
+        ])?;
         sig.update(&self.policy.bytes())?;
         sig.update(digest)?;
         sig.update(&msr.mnonce)?;
@@ -190,7 +196,7 @@ impl Session<Initialized> {
     /// # Safety
     ///
     /// This method must only be used in tests or unattested workflows.
-    pub unsafe fn mock_verify(self, msr: launch::sev::Measurement) -> Result<Session<Verified>> {
+    pub unsafe fn mock_verify(self, msr: Measurement) -> Result<Session<Verified>> {
         Ok(Session {
             policy: self.policy,
             tek: self.tek,
@@ -212,8 +218,8 @@ impl Session<Measuring> {
     /// Verifies the session's measurement against the AMD SP's measurement.
     pub fn verify(
         mut self,
-        build: Build,
-        msr: launch::sev::Measurement,
+        firmware_version: FirmwareVersion,
+        msr: Measurement,
     ) -> Result<Session<Verified>> {
         let digest = self.data.0.finish()?;
         let session = Session {
@@ -223,15 +229,15 @@ impl Session<Measuring> {
             data: Initialized,
         };
 
-        session.verify(&digest, build, msr)
+        session.verify(&digest, firmware_version, msr)
     }
 
     /// Verifies the session's measurement against the AMD SP's measurement
     /// using an externally generated digest.
     pub fn verify_with_digest(
         self,
-        build: Build,
-        msr: launch::sev::Measurement,
+        firmware_version: FirmwareVersion,
+        msr: Measurement,
         digest: &[u8],
     ) -> Result<Session<Verified>> {
         let session = Session {
@@ -241,7 +247,7 @@ impl Session<Measuring> {
             data: Initialized,
         };
 
-        session.verify(digest, build, msr)
+        session.verify(digest, firmware_version, msr)
     }
 }
 
@@ -249,9 +255,9 @@ impl Session<Verified> {
     /// Creates a packet for a secret to be injected into the guest.
     pub fn secret(
         &self,
-        flags: launch::sev::HeaderFlags,
+        flags: HeaderFlags,
         data: &[u8],
-    ) -> std::result::Result<launch::sev::Secret, SessionError> {
+    ) -> std::result::Result<Secret, SessionError> {
         let mut iv = [0u8; 16];
 
         let mut rng: RdRand = RdRand::new()?;
@@ -264,7 +270,7 @@ impl Session<Verified> {
         let mut sig = sign::Signer::new(hash::MessageDigest::sha256(), &key)?;
 
         sig.update(&[0x01u8])?;
-        sig.update(&unsafe { std::mem::transmute::<launch::sev::HeaderFlags, [u8; 4]>(flags) })?;
+        sig.update(&unsafe { std::mem::transmute::<HeaderFlags, [u8; 4]>(flags) })?;
         sig.update(&iv)?;
         sig.update(&(data.len() as u32).to_le_bytes())?;
         sig.update(&(ciphertext.len() as u32).to_le_bytes())?;
@@ -274,8 +280,8 @@ impl Session<Verified> {
         let mut mac = [0u8; 32];
         sig.sign(&mut mac)?;
 
-        Ok(launch::sev::Secret {
-            header: launch::sev::Header { flags, iv, mac },
+        Ok(Secret {
+            header: Header { flags, iv, mac },
             ciphertext,
         })
     }
@@ -283,17 +289,15 @@ impl Session<Verified> {
 
 #[cfg(test)]
 mod initialized {
-    use super::*;
-    use crate::{
-        firmware::host::{Build, Version},
-        launch,
-        session::Session,
-    };
+    use super::key;
+    use super::{Initialized, Measurement, Policy, Session};
+    use crate::launch::sev::PolicyFlags;
+    use crate::types::shared::FirmwareVersion;
 
     #[test]
     fn session() {
         let session = Session {
-            policy: launch::sev::Policy::default(),
+            policy: Policy::default(),
             tek: key::Key::new(vec![0u8; 16]),
             tik: key::Key::new(vec![0u8; 16]),
             data: Initialized,
@@ -343,7 +347,7 @@ mod initialized {
             0x78, 0x52, 0xb8, 0x55,
         ];
 
-        let measurement = launch::sev::Measurement {
+        let measurement = Measurement {
             measure: [
                 0x6f, 0xaa, 0xb2, 0xda, 0xae, 0x38, 0x9b, 0xcd, 0x34, 0x05, 0xa0, 0x5d, 0x6c, 0xaf,
                 0xe3, 0x3c, 0x04, 0x14, 0xf7, 0xbe, 0xdd, 0x0b, 0xae, 0x19, 0xba, 0x5f, 0x38, 0xb7,
@@ -355,8 +359,8 @@ mod initialized {
             ],
         };
 
-        let policy = launch::sev::Policy {
-            flags: launch::sev::PolicyFlags::default(),
+        let policy = Policy {
+            flags: PolicyFlags::default(),
             minfw: Default::default(),
         };
 
@@ -372,14 +376,10 @@ mod initialized {
             tik,
             data: Initialized,
         };
-        let build = Build {
-            version: Version {
-                major: 0x00,
-                minor: 0x12,
-            },
-            build: 0x0f,
-        };
+        let firmware_version = FirmwareVersion::new(0x00, 0x12, 0x0f);
 
-        session.verify(&digest, build, measurement).unwrap();
+        session
+            .verify(&digest, firmware_version, measurement)
+            .unwrap();
     }
 }

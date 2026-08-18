@@ -132,8 +132,6 @@ pub mod platform;
 pub(crate) mod firmware;
 #[cfg(feature = "launch")]
 pub mod launch;
-#[cfg(all(target_os = "linux", feature = "crypto-openssl", feature = "sev"))]
-pub mod session;
 mod util;
 
 /// Error module.

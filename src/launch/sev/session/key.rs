@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
-use super::*;
+use crate::parser::Encoder;
 
 use std::{
     convert::*,
+    io::{ErrorKind, Result, Write},
     ops::{Deref, DerefMut},
     ptr::write_volatile,
 };

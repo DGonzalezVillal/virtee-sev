@@ -9,16 +9,6 @@ use std::{
     mem::{size_of_val, MaybeUninit},
 };
 
-/// Initialize the SEV platform context.
-#[repr(C)]
-#[allow(dead_code)]
-pub struct Init;
-
-/// Initialize the SEV-ES platform context.
-#[repr(C)]
-#[allow(dead_code)]
-pub struct EsInit;
-
 #[derive(Clone, Copy)]
 #[repr(transparent)]
 pub struct Handle(u32);
