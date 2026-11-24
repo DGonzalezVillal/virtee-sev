@@ -8,5 +8,7 @@
 
 pub mod authenticate;
 pub mod parser;
+pub mod verifiable;
 
 pub use authenticate::{Authenticate, AuthenticateError};
+pub use verifiable::{Verifiable, VerifyError};
